@@ -27,6 +27,30 @@ async function makeAihotApp(fetchImpl, now) {
 }
 
 describe("API 路由", () => {
+  it("提供与公开路由一致的在线接口文档和 OpenAPI 定义", async () => {
+    const app = await makeApp();
+    const page = await app.inject("/api/docs");
+    expect(page.statusCode).toBe(200);
+    expect(page.headers["content-type"]).toContain("text/html");
+    expect(page.body).toContain("接口文档");
+    expect(page.body).toContain("/api/v1/hot/{sourceId}");
+    expect((await app.inject("/api/docs/")).statusCode).toBe(200);
+
+    const specResponse = await app.inject("/api/openapi.json");
+    expect(specResponse.statusCode).toBe(200);
+    const spec = specResponse.json();
+    expect(spec.openapi).toBe("3.0.3");
+    expect(Object.keys(spec.paths).sort()).toEqual([
+      "/api/v1/batch", "/api/v1/fetch-logs", "/api/v1/health", "/api/v1/health/live",
+      "/api/v1/hot/{sourceId}", "/api/v1/metrics", "/api/v1/sources",
+    ].sort());
+    for (const path of Object.keys(spec.paths)) {
+      expect(app.hasRoute({ method: "GET", url: path.replace("{sourceId}", ":sourceId") })).toBe(true);
+    }
+    expect(spec.paths["/api/v1/batch"].get.parameters.find((entry) => entry.name === "sources")).toMatchObject({ required: true, schema: { maxLength: 500 } });
+    expect(spec.paths["/api/v1/fetch-logs"].get.parameters.find((entry) => entry.name === "status").schema.enum).toContain("not_modified");
+  });
+
   it("返回来源、真实热点和批量摘要", async () => {
     const app = await makeApp();
     expect((await app.inject("/api/v1/sources")).json().sources).toHaveLength(1);

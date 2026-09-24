@@ -5,6 +5,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
+import { apiDocsRoutes } from "./api-docs.js";
 import { batchRoutes } from "./routes/batch.js";
 import { fetchLogsRoutes } from "./routes/fetch-logs.js";
 import { healthRoutes } from "./routes/health.js";
@@ -35,6 +36,7 @@ export async function buildApp(options = {}) {
   await app.register(healthRoutes, context);
   await app.register(metricsRoutes, context);
   await app.register(fetchLogsRoutes, context);
+  await app.register(apiDocsRoutes);
 
   app.setErrorHandler((error, request, reply) => {
     const validation = Boolean(error.validation);

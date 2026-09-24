@@ -67,6 +67,8 @@ PLAYWRIGHT_HTML_OPEN=never pnpm test:e2e
 
 ## API
 
+在线接口文档：本地开发访问 [http://localhost:5173/api/docs](http://localhost:5173/api/docs)，生产环境访问 [https://hot-spots.kevinlau.cn/api/docs](https://hot-spots.kevinlau.cn/api/docs)。页面可填写参数并直接发送请求；[OpenAPI JSON](https://hot-spots.kevinlau.cn/api/openapi.json) 可导入其他 API 工具。本地原始文档地址为 `http://localhost:5173/api/openapi.json`。
+
 | 接口 | 说明 |
 |---|---|
 | `GET /api/v1/sources` | 来源元数据和当前状态 |
