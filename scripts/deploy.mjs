@@ -168,7 +168,7 @@ echo 'deployed=${image}'`;
 ssh(deployScript, "ssh <tencent-cloud> 载入镜像、健康检查并切换版本");
 
 if (!config.skipPublicCheck) {
-  run("curl", ["--fail", "--silent", "--show-error", "--location", "--max-time", "20", `https://${config.domain}/api/v1/health/live`], { visible: `curl https://${config.domain}/api/v1/health/live` });
+  run("curl", ["--noproxy", "*", "--fail", "--silent", "--show-error", "--location", "--max-time", "20", `https://${config.domain}/api/v1/health/live`], { visible: `curl --noproxy '*' https://${config.domain}/api/v1/health/live` });
 }
 
 if (!dryRun) rmSync(imageArchive, { force: true });
