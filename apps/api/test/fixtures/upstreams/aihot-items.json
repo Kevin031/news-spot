@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "id": "cmudnpv0k0hrrrogg9gcyun5n",
+      "title": "OpenAI 发布 GPT-6 Sol 与 Luna",
+      "summary": "两款模型已上线 API。",
+      "source": { "name": "MarkTechPost（RSS）" },
+      "links": {
+        "aihot": "https://aihot.news/items/cmudnpv0k0hrrrogg9gcyun5n",
+        "original": "https://www.marktechpost.com/2026/09/22/openai-releases-gpt-6-sol-and-luna-50-cheaper-api-pricing-and-benchmarks"
+      },
+      "publishedAt": "2026-09-23T05:18:36.000Z",
+      "attribution": { "name": "AIHOT", "url": "https://aihot.news/items/cmudnpv0k0hrrrogg9gcyun5n" }
+    }
+  ]
+}

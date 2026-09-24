@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.playwright-cli/
+data/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.deploy
+.env.production
+.deploy/
+.DS_Store

@@ -1,0 +1,64 @@
+services:
+  news-spot:
+    image: ${NEWS_SPOT_IMAGE:?NEWS_SPOT_IMAGE is required}
+    container_name: news-spot
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_PATH: /app/data/news.db
+      WEB_DIST_PATH: /app/apps/web/dist
+    volumes:
+      - news-spot-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health/live').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+  news-spot-worker:
+    image: ${NEWS_SPOT_IMAGE:?NEWS_SPOT_IMAGE is required}
+    container_name: news-spot-worker
+    command: ["node", "apps/api/src/worker.js"]
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
+    depends_on:
+      news-spot:
+        condition: service_healthy
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      NODE_ENV: production
+      DATABASE_PATH: /app/data/news.db
+      TZ: Asia/Shanghai
+    volumes:
+      - news-spot-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "apps/api/scripts/worker-health.js"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+volumes:
+  news-spot-data:
+    name: news-spot-data

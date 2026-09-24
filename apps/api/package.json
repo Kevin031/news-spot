@@ -1,0 +1,36 @@
+{
+  "name": "@news-spot/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch scripts/dev.js",
+    "start": "node src/server.js",
+    "worker": "node src/worker.js",
+    "worker:once": "node src/worker.js --once",
+    "build": "node scripts/build.js",
+    "test": "vitest run",
+    "test:smoke": "node scripts/smoke.js",
+    "lint": "eslint src test scripts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/helmet": "^13.0.1",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/static": "^8.2.0",
+    "@news-spot/contracts": "workspace:*",
+    "better-sqlite3": "^12.2.0",
+    "fast-xml-parser": "^5.2.5",
+    "fastify": "^5.6.0",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.18.0",
+    "eslint": "^9.35.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

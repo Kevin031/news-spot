@@ -1,0 +1,224 @@
+{
+  "meta": {
+    "name": "NewsHub 参考站设计 DNA",
+    "description": "基于 2026-08-21 对参考站桌面端、服务端 HTML 与运行态页面的只读分析，作为新闻聚合站的视觉基线，不代表复制其品牌或源代码。",
+    "source_references": [
+      "https://newshub.shenzjd.com/",
+      "https://newshub.shenzjd.com/api"
+    ],
+    "created_at": "2026-08-21T17:20:00+08:00"
+  },
+  "design_system": {
+    "color": {
+      "palette_type": "analogous",
+      "primary": { "hex": "#4F46E5", "role": "主操作、当前分类和品牌识别" },
+      "secondary": { "hex": "#7C3AED", "role": "品牌渐变和强调层次" },
+      "accent": { "hex": "#3B82F6", "role": "链接、焦点态和信息反馈" },
+      "neutral": {
+        "scale": ["#FFFFFF", "#F8FAFC", "#F1F5F9", "#E2E8F0", "#94A3B8", "#475569", "#0F172A"],
+        "usage": "白色与浅灰承载页面和卡片，蓝灰用于次级信息，深蓝灰用于正文"
+      },
+      "semantic": { "success": "#22C55E", "warning": "#F59E0B", "error": "#EF4444", "info": "#3B82F6" },
+      "surface": { "background": "#F8FAFC", "card": "#FFFFFF", "elevated": "rgba(255,255,255,0.80)" },
+      "contrast_strategy": "以浅底深字为主，品牌操作使用高饱和蓝紫底和白字，暗色主题反转中性色阶"
+    },
+    "typography": {
+      "type_scale": {
+        "display": { "size": "28px", "weight": "700", "line_height": "36px", "tracking": "-0.02em" },
+        "heading_1": { "size": "18px", "weight": "700", "line_height": "26px", "tracking": "-0.01em" },
+        "heading_2": { "size": "16px", "weight": "700", "line_height": "24px", "tracking": "0" },
+        "heading_3": { "size": "14px", "weight": "700", "line_height": "21px", "tracking": "0" },
+        "body": { "size": "14px", "weight": "400", "line_height": "21px", "tracking": "0" },
+        "body_small": { "size": "12px", "weight": "400", "line_height": "18px", "tracking": "0" },
+        "caption": { "size": "12px", "weight": "400", "line_height": "16px", "tracking": "0" },
+        "overline": { "size": "11px", "weight": "600", "line_height": "16px", "tracking": "0.04em" }
+      },
+      "font_families": {
+        "heading": "system-ui, Segoe UI, Roboto, Noto Sans, sans-serif",
+        "body": "system-ui, Segoe UI, Roboto, Noto Sans, sans-serif",
+        "mono": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+      },
+      "font_style_notes": "系统无衬线字体，信息密度较高；标题依赖字重而非大字号建立层级"
+    },
+    "spacing": {
+      "base_unit": "4px",
+      "scale": ["4px", "8px", "12px", "16px", "24px", "32px", "48px"],
+      "content_density": "compact",
+      "section_rhythm": "工具区 24px、卡片栅格 24px，卡片内部列表项约 16px 垂直节奏"
+    },
+    "layout": {
+      "grid_system": "响应式等宽卡片栅格",
+      "max_content_width": "1280px 至 1536px",
+      "columns": "移动端 1 列、中屏 2 列、宽屏 3 列、超宽屏 4 列",
+      "gutter": "16px 至 24px",
+      "breakpoints": ["640px", "768px", "1280px", "1536px"],
+      "alignment_tendency": "strict grid"
+    },
+    "shape": {
+      "border_radius": { "small": "4px", "medium": "12px", "large": "16px", "pill": "9999px" },
+      "border_usage": "卡片和顶栏采用细浅色分割线，输入框使用 1px 至 2px 边框",
+      "divider_style": "1px 实线低对比度蓝灰"
+    },
+    "elevation": {
+      "shadow_style": "soft diffused",
+      "levels": {
+        "low": "0 1px 2px rgba(15,23,42,0.06)",
+        "medium": "0 10px 15px -3px rgba(79,70,229,0.18)",
+        "high": "0 20px 30px -12px rgba(15,23,42,0.20)"
+      },
+      "depth_cues": "半透明顶栏、轻阴影、边框和局部蓝紫光晕"
+    },
+    "iconography": {
+      "style": "简洁线性图标配少量平台符号",
+      "stroke_weight": "2px",
+      "size_scale": ["16px", "20px", "24px"],
+      "preferred_set": "Heroicons 风格的内联 SVG"
+    },
+    "motion": {
+      "easing": "cubic-bezier(0.4,0,0.2,1)",
+      "duration_scale": { "micro": "150ms", "normal": "300ms", "macro": "500ms" },
+      "entrance_pattern": "骨架屏过渡到内容，局部淡入",
+      "exit_pattern": "透明度淡出",
+      "philosophy": "minimal functional"
+    },
+    "components": {
+      "button_style": "紧凑按钮与圆形图标按钮；选中态为蓝紫实底和轻阴影",
+      "input_style": "浅色半透明搜索框，聚焦时蓝色边框并轻微上浮",
+      "card_style": "圆角白色信息卡，头部、榜单、底部分区，排名用圆形序号",
+      "navigation_pattern": "粘性顶栏加水平分类筛选",
+      "modal_style": "居中浅色面板、较大圆角、背景遮罩与轻模糊",
+      "list_style": "排名、标题、时间或热度三段式紧凑榜单",
+      "component_notes": "卡片同时承载加载、成功、空数据和错误四种状态；桌面支持网格与列表切换"
+    }
+  },
+  "design_style": {
+    "aesthetic": {
+      "mood": ["清爽", "高效", "可信", "轻科技"],
+      "visual_metaphor": "实时数据仪表盘与新闻剪报墙的结合",
+      "era_influence": "2020 年代 SaaS 仪表盘",
+      "genre": "轻量数据仪表盘",
+      "personality_traits": ["克制", "实用", "响应迅速"],
+      "adjectives": ["紧凑", "明亮", "模块化", "可扫描"]
+    },
+    "visual_language": {
+      "complexity": "moderate",
+      "ornamentation": "subtle accents",
+      "whitespace_usage": "卡片间留白明显，卡片内部密度较高",
+      "visual_weight_distribution": "顶栏轻、分类栏中等、内容卡片占主要视觉重量",
+      "focal_strategy": "distributed interest",
+      "contrast_level": "medium-high",
+      "texture_usage": "几乎无纹理，仅品牌按钮存在极弱噪点质感"
+    },
+    "composition": {
+      "hierarchy_method": "typographic hierarchy and spatial grouping",
+      "balance_type": "symmetric grid",
+      "flow_direction": "从上到下、从左到右扫描",
+      "grouping_strategy": "按来源分卡、按栏目筛选、按排名分行",
+      "negative_space_role": "分隔高密度来源卡并维持可扫描性"
+    },
+    "imagery": {
+      "photo_treatment": "正文默认不展示照片，分享图功能独立呈现",
+      "illustration_style": "无主插画，使用线性图标和平台符号",
+      "graphic_elements": "蓝紫渐变、状态圆点、圆形排名标记",
+      "pattern_usage": "无重复图案",
+      "image_shape": "平台图标使用圆角方形容器"
+    },
+    "interaction_feel": {
+      "feedback_style": "即时状态变化与局部刷新反馈",
+      "hover_behavior": "轻微颜色、阴影或位移变化",
+      "transition_personality": "snappy",
+      "loading_style": "卡片骨架屏和进度条",
+      "microinteraction_density": "medium"
+    },
+    "brand_voice_in_ui": {
+      "tone": "直接、工具化",
+      "formality": "中性",
+      "cta_style": "direct imperative",
+      "empty_state_approach": "说明暂无内容并提供刷新重试",
+      "error_tone": "简洁描述失败，给出可恢复操作"
+    }
+  },
+  "visual_effects": {
+    "overview": {
+      "effect_intensity": "subtle-accent",
+      "performance_tier": "lightweight",
+      "fallback_strategy": "减少动态效果时保留静态渐变和状态信息",
+      "primary_technology": "CSS only"
+    },
+    "background_effects": {
+      "type": "mesh-gradient",
+      "description": "浅灰、淡蓝和淡紫叠加的固定背景，并以大面积模糊色块营造层次",
+      "technology": "CSS gradients and blur",
+      "params": {
+        "color_palette": ["#F8FAFC", "#EFF6FF", "#FAF5FF"],
+        "speed": "6s pulse",
+        "density": "2 blurred blobs",
+        "opacity": "0.30 light / 0.10 dark",
+        "blend_mode": "normal"
+      }
+    },
+    "particle_systems": {
+      "enabled": false,
+      "type": "none",
+      "description": "未观察到粒子系统",
+      "technology": "none",
+      "params": { "count": 0, "shape": "none", "size_range": "none", "movement_pattern": "none", "color_behavior": "none", "interaction": "none", "spawn_area": "none" }
+    },
+    "3d_elements": {
+      "enabled": false,
+      "type": "none",
+      "description": "未观察到三维元素",
+      "technology": "none",
+      "params": { "renderer": "none", "lighting": "none", "camera": "none", "materials": "none", "geometry": "none", "post_processing": [], "interaction_model": "none" }
+    },
+    "shader_effects": {
+      "enabled": false,
+      "type": "none",
+      "description": "未观察到着色器效果",
+      "technology": "none",
+      "params": { "uniforms": {}, "vertex_manipulation": "none", "fragment_output": "none", "noise_type": "none", "distortion": "none" }
+    },
+    "scroll_effects": {
+      "parallax": { "enabled": false, "layers": 0, "depth_range": "none", "speed_curve": "none" },
+      "scroll_triggered_animations": { "enabled": false, "trigger_points": [], "animation_type": "none", "scrub_behavior": "none" },
+      "scroll_morphing": { "enabled": false, "description": "未观察到滚动形变" }
+    },
+    "text_effects": {
+      "type": "gradient-fill",
+      "description": "品牌名称使用蓝紫渐变文字，其余文本保持静态",
+      "technology": "CSS background-clip",
+      "params": { "split_strategy": "none", "animation_per_unit": "none", "stagger": "0ms", "effect_style": "static blue-purple gradient" }
+    },
+    "cursor_effects": {
+      "enabled": false,
+      "type": "none",
+      "description": "使用系统指针",
+      "params": { "shape": "system", "size": "system", "blend_mode": "normal", "trail": "none", "interaction_zone": "none" }
+    },
+    "image_effects": {
+      "type": "none",
+      "description": "主界面几乎不使用内容图片",
+      "technology": "none",
+      "params": { "filter_pipeline": [], "hover_transform": "none", "reveal_animation": "none", "distortion_type": "none" }
+    },
+    "glassmorphism_neumorphism": {
+      "enabled": true,
+      "style": "glassmorphism",
+      "params": { "blur_radius": "24px header / 10px input", "transparency": "0.70 to 0.80", "border_treatment": "1px translucent slate", "shadow_type": "soft diffused", "light_source_angle": "top" }
+    },
+    "canvas_drawings": {
+      "enabled": false,
+      "type": "none",
+      "description": "未观察到 Canvas 绘制",
+      "technology": "none",
+      "params": { "draw_method": "none", "animation_loop": "none", "color_scheme": "none", "responsiveness": "none", "interaction": "none" }
+    },
+    "svg_animations": {
+      "enabled": false,
+      "type": "static-icons",
+      "description": "内联 SVG 图标为静态，旋转等状态由 CSS 控制",
+      "params": { "animation_method": "CSS transform when needed", "path_morphing": false, "stroke_animation": false, "filter_effects": "none" }
+    },
+    "composite_notes": "视觉效果以低成本 CSS 为主。建议保留半透明粘性顶栏、蓝紫渐变、骨架屏和轻微 hover，避免引入 Canvas 或 WebGL，以优先保障多卡片页面的滚动和移动端性能。"
+  }
+}

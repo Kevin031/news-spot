@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "count": 1,
+  "items": [
+    {
+      "rank": 1,
+      "id": "cmucwpqty0rj8roedzxz1496u",
+      "title": "AI 模型发布成为多源热点",
+      "source": { "name": "X：Claude (@claudeai)" },
+      "links": {
+        "aihot": "https://aihot.news/items/cmucwpqty0rj8roedzxz1496u",
+        "original": "https://x.com/claudeai/status/2102435511222890900",
+        "story": "https://aihot.virxact.com/story/80211185-0b01-4268-b5f4-a37b003d4faa"
+      },
+      "sourceCount": 23,
+      "signalCount": 16,
+      "latestAt": "2026-09-22T22:21:40.000Z"
+    }
+  ]
+}

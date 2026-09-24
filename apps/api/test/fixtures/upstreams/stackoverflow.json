@@ -1,0 +1,29 @@
+{
+  "quota_remaining": 299,
+  "items": [
+    {
+      "question_id": 80003283,
+      "title": "How to compute a gradient column-wise in a pandas DataFrame using the index as an input?",
+      "link": "https://stackoverflow.com/questions/80003283/how-to-compute-a-gradient-column-wise-in-a-pandas-dataframe-using-the-index-as-a",
+      "score": 0,
+      "answer_count": 0,
+      "creation_date": 1789484206
+    },
+    {
+      "question_id": 80003281,
+      "title": "What is the difference between MiniProfiler&#39;s request duration and action duration?",
+      "link": "https://stackoverflow.com/questions/80003281/what-is-the-difference-between-miniprofilers-request-duration-and-action-durati",
+      "score": 4,
+      "answer_count": 1,
+      "creation_date": 1789483617
+    },
+    {
+      "question_id": 80003272,
+      "title": "Preserving whitespace during lxml serialization",
+      "link": "https://stackoverflow.com/questions/80003272/preserving-whitespace-during-lxml-serialization",
+      "score": 0,
+      "answer_count": 0,
+      "creation_date": 1789479436
+    }
+  ]
+}
