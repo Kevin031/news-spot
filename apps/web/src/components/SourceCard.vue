@@ -1,9 +1,17 @@
 <script setup>
 import { computed } from "vue";
+import AppIcon from "./AppIcon.vue";
 import HotItemRow from "./HotItemRow.vue";
 
 const props = defineProps({ source: { type: Object, required: true }, result: { type: Object, default: null }, query: { type: String, default: "" } });
 defineEmits(["refresh"]);
+const sourceMarks = {
+  hackernews: "HN", v2ex: "V2", github: "GH", bbc: "BBC", ithome: "IT", bilibili: "B",
+  devto: "DEV", stackoverflow: "SO", lobsters: "L", sspai: "SP", solidot: "SD",
+  techcrunch: "TC", "npr-world": "NPR", marketwatch: "MW", arstechnica: "AR",
+  "aihot-selected": "AI", "aihot-topics": "AI",
+};
+const sourceMark = computed(() => sourceMarks[props.source.id] || props.source.name.slice(0, 2).toUpperCase());
 const filteredItems = computed(() => {
   const items = props.result?.items || [];
   const keyword = props.query.trim().toLocaleLowerCase();
@@ -15,10 +23,10 @@ function formatTime(value) { return value ? new Intl.DateTimeFormat("zh-CN", { y
 </script>
 
 <template>
-  <article :class="['source-card', `source-card--${state}`]">
+  <article :class="['source-card', `source-card--${state}`, { 'source-card--short': state === 'error' || (state !== 'loading' && filteredItems.length === 0) }]">
     <header class="card-header">
-      <div class="source-identity"><span class="source-mark">{{ source.name.slice(0, 1).toUpperCase() }}</span><span><h2>{{ source.name }}</h2><small><span class="status-dot" />{{ statusText }}</small></span></div>
-      <button class="card-refresh" type="button" :disabled="state === 'loading'" :aria-label="`重新加载 ${source.name}`" @click="$emit('refresh')">重新加载</button>
+      <div class="source-identity"><span class="source-mark" aria-hidden="true">{{ sourceMark }}</span><span class="source-label"><h2>{{ source.name }}</h2><small><span class="status-dot" />{{ statusText }}</small></span></div>
+      <button v-if="state !== 'error'" class="card-refresh" type="button" :disabled="state === 'loading'" :aria-label="`重新加载 ${source.name}`" :title="`重新加载 ${source.name}`" @click="$emit('refresh')"><AppIcon name="refresh" /></button>
     </header>
     <div v-if="state === 'loading'" class="card-state skeleton-state" role="status"><span v-for="index in 6" :key="index" class="skeleton-line" /></div>
     <div v-else-if="state === 'error'" class="card-state"><strong>暂时无法获取数据</strong><p>{{ result?.error?.message || "请稍后重试" }}</p><button type="button" @click="$emit('refresh')">重新连接</button></div>

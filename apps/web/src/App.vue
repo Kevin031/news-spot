@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AppHeader from "./components/AppHeader.vue";
+import AppIcon from "./components/AppIcon.vue";
 import CategoryTabs from "./components/CategoryTabs.vue";
 import SearchDialog from "./components/SearchDialog.vue";
 import SourceCard from "./components/SourceCard.vue";
@@ -62,12 +63,10 @@ onBeforeUnmount(() => { window.removeEventListener("keydown", onKeydown); stop()
     <AppHeader
       v-model:search="search"
       :theme="theme"
-      :layout="layout"
       :loading="loading"
       @open-search="searchOpen = true"
       @open-fetch-logs="fetchLogsOpen = true"
       @refresh="refreshAll"
-      @toggle-layout="toggleLayout"
       @toggle-theme="toggleTheme"
     />
 
@@ -76,8 +75,8 @@ onBeforeUnmount(() => { window.removeEventListener("keydown", onKeydown); stop()
         <CategoryTabs v-model="activeCategory" :categories="visibleCategories" :counts="categoryCounts" />
         <div class="toolbar-actions">
           <span class="toolbar-status"><span class="status-dot" :class="{ 'status-dot--busy': loading }" />{{ onlineCount }} 个来源可用</span>
-          <button class="icon-button" type="button" :aria-label="layout === 'grid' ? '切换紧凑布局' : '切换网格布局'" @click="toggleLayout">
-            {{ layout === "grid" ? "列表" : "网格" }}
+          <button class="icon-button layout-button" type="button" aria-label="切换布局" :aria-pressed="layout === 'compact'" @click="toggleLayout">
+            <AppIcon :name="layout === 'grid' ? 'columns' : 'grid'" />{{ layout === "grid" ? "紧凑" : "标准" }}
           </button>
         </div>
       </section>

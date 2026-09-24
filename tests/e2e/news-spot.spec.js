@@ -37,13 +37,21 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/v1/fetch-logs?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ items: [{ id: 1, sourceId: "hackernews", trigger: "scheduled", startedAt: "2026-09-23T01:00:00Z", finishedAt: "2026-09-23T01:00:01Z", status: "success", itemCount: 20, errorCode: null }], nextCursor: null, latestSlot: { key: "2026-09-23T09:00", status: "completed", success: 8, failed: 0, total: 8 } }) }));
 });
 
-test("响应式首页展示真实来源状态且无横向溢出", async ({ page }) => {
+test("响应式首页展示真实来源状态且无横向溢出", async ({ page }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Hacker News" })).toBeVisible();
   await expect(page.getByText("最近成功快照")).toBeVisible();
   await expect(page.getByText("暂时无法获取数据")).toBeVisible();
   await expect(page.locator(".source-card")).toHaveCount(8);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  if (testInfo.project.name === "desktop") {
+    const cards = page.locator(".source-card");
+    const first = await cards.nth(0).boundingBox();
+    const second = await cards.nth(1).boundingBox();
+    const error = await page.locator(".source-card--error").boundingBox();
+    expect(Math.abs(first.height - second.height)).toBeLessThan(1);
+    expect(error.height).toBeLessThan(400);
+  }
 });
 
 test("页面重载只请求已保存数据，抓取日志按钮在移动端可用", async ({ page }) => {
@@ -104,6 +112,7 @@ test("分类、搜索、布局和主题可操作并持久化", async ({ page }, 
   await page.getByRole("dialog").getByRole("button", { name: "关闭" }).click();
 
   if (testInfo.project.name === "desktop") {
+    await expect(page.getByRole("button", { name: "切换布局" })).toHaveCount(1);
     await page.getByRole("button", { name: "切换布局" }).click();
     expect(await page.evaluate(() => localStorage.getItem("news-spot-layout"))).toBe("compact");
   }

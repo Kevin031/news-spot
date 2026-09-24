@@ -30,6 +30,13 @@ describe("SourceCard", () => {
     expect(wrapper.text()).toContain("更新于 2026/09/22");
   });
 
+  it("中文来源使用稳定的缩写标识，错误状态只显示一个重试按钮", () => {
+    const wrapper = mount(SourceCard, { props: { source: { ...source, id: "ithome", name: "IT之家" }, result: { status: "error", items: [], error: { message: "上游失败" } } } });
+    expect(wrapper.get(".source-mark").text()).toBe("IT");
+    expect(wrapper.findAll("button")).toHaveLength(1);
+    expect(wrapper.get("button").text()).toBe("重新连接");
+  });
+
   it("真实条目链接安全打开原始来源", () => {
     const wrapper = mount(SourceCard, { props: { source, result: { status: "fresh", items: [item] } } });
     const link = wrapper.find(".hot-main-link");
