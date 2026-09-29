@@ -1,9 +1,13 @@
+import { responseSchema } from "../route-schemas.js";
+
 export async function hotRoutes(app, context) {
   app.get("/api/v1/hot/:sourceId", {
     config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
     schema: {
-      params: { type: "object", required: ["sourceId"], properties: { sourceId: { type: "string", minLength: 1, maxLength: 64 } } },
-      querystring: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 50, default: 20 }, refresh: { type: "boolean", default: false } } },
+      tags: ["热点"], summary: "获取单个来源的热点", description: "按来源 ID 获取热点；refresh=true 已停用，会返回 400。",
+      params: { type: "object", required: ["sourceId"], properties: { sourceId: { type: "string", minLength: 1, maxLength: 64, description: "来源 ID，可先从来源列表获取", examples: ["hackernews"] } } },
+      querystring: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 50, default: 20, description: "返回条数" }, refresh: { type: "boolean", default: false, description: "强制抓取已停用；传 true 返回 400" } } },
+      response: { 200: responseSchema("SourceResult"), 400: responseSchema("ApiError"), 404: responseSchema("ApiError"), 500: responseSchema("ApiError") },
     },
   }, async (request, reply) => {
     const { sourceId } = request.params;

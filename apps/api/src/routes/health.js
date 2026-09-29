@@ -1,6 +1,14 @@
+import { responseSchema } from "../route-schemas.js";
+
 export async function healthRoutes(app, context) {
-  app.get("/api/v1/health/live", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
-  app.get("/api/v1/health", async (_request, reply) => {
+  app.get("/api/v1/health/live", { schema: {
+    tags: ["运行状态"], summary: "存活检查", description: "用于确认 API 进程正在响应。",
+    response: { 200: responseSchema("LiveResponse") },
+  } }, async () => ({ status: "ok", timestamp: new Date().toISOString() }));
+  app.get("/api/v1/health", { schema: {
+    tags: ["运行状态"], summary: "就绪状态", description: "汇总数据库、来源和 Worker 状态；数据库异常时返回 503。",
+    response: { 200: responseSchema("HealthResponse"), 503: responseSchema("HealthResponse", "数据库异常") },
+  } }, async (_request, reply) => {
     const descriptions = context.registry.list().map((source) => context.hotService.describeSource(source));
     const counts = { total: descriptions.length, fresh: 0, stale: 0, error: 0, unknown: 0 };
     for (const source of descriptions) counts[source.status] += 1;

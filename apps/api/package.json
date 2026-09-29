@@ -19,6 +19,7 @@
     "@fastify/helmet": "^13.0.1",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^8.2.0",
+    "@fastify/swagger": "^9.9.0",
     "@news-spot/contracts": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "fast-xml-parser": "^5.2.5",

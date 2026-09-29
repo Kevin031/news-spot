@@ -25,6 +25,7 @@ const shortcut = /Mac|iPhone|iPad/.test(window.navigator.platform) ? "⌘ K" : "
         <button class="icon-button icon-button--square mobile-only" type="button" aria-label="打开搜索" title="搜索" @click="$emit('open-search')"><AppIcon name="search" /></button>
         <button class="icon-button" type="button" :disabled="loading" aria-label="重新加载全部来源" title="刷新全部来源" @click="$emit('refresh')"><AppIcon name="refresh" /><span class="header-action-label">{{ loading ? "加载中" : "全部刷新" }}</span></button>
         <button class="icon-button" type="button" aria-label="抓取日志" title="查看抓取日志" @click="$emit('open-fetch-logs')"><AppIcon name="logs" /><span class="header-action-label">日志</span></button>
+        <a class="icon-button" href="/api/docs" aria-label="接口文档" title="查看开放接口文档"><AppIcon name="docs" /><span class="header-action-label">接口文档</span></a>
         <button class="icon-button icon-button--square" type="button" aria-label="切换主题" :title="theme === 'light' ? '切换深色主题' : '切换浅色主题'" @click="$emit('toggle-theme')"><AppIcon :name="theme === 'light' ? 'moon' : 'sun'" /></button>
       </div>
     </div>

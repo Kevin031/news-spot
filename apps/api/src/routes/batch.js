@@ -1,6 +1,12 @@
+import { responseSchema } from "../route-schemas.js";
+
 export async function batchRoutes(app, context) {
   app.get("/api/v1/batch", {
-    schema: { querystring: { type: "object", required: ["sources"], properties: { sources: { type: "string", minLength: 1, maxLength: 500 }, limit: { type: "integer", minimum: 1, maximum: 50, default: 12 } } } },
+    schema: {
+      tags: ["热点"], summary: "批量获取热点", description: "最多 12 个来源；未知来源会在 results 中返回失败项，其他来源照常返回。",
+      querystring: { type: "object", required: ["sources"], properties: { sources: { type: "string", minLength: 1, maxLength: 500, description: "以逗号分隔的来源 ID，去重后最多 12 个" }, limit: { type: "integer", minimum: 1, maximum: 50, default: 12, description: "每个来源返回的条数" } } },
+      response: { 200: responseSchema("BatchResponse"), 400: responseSchema("ApiError"), 500: responseSchema("ApiError") },
+    },
   }, async (request, reply) => {
     const ids = [...new Set(request.query.sources.split(",").map((id) => id.trim()).filter(Boolean))];
     if (ids.length > 12) return reply.code(400).send(context.apiError(request, "TOO_MANY_SOURCES", "单次最多请求 12 个数据源", null, false));

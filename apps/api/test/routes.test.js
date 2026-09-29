@@ -34,12 +34,15 @@ describe("API 路由", () => {
     expect(page.headers["content-type"]).toContain("text/html");
     expect(page.body).toContain("接口文档");
     expect(page.body).toContain("/api/v1/hot/{sourceId}");
+    expect(page.body).toContain("SourceResult");
     expect((await app.inject("/api/docs/")).statusCode).toBe(200);
 
     const specResponse = await app.inject("/api/openapi.json");
     expect(specResponse.statusCode).toBe(200);
     const spec = specResponse.json();
     expect(spec.openapi).toBe("3.0.3");
+    expect(spec.paths["/api/docs"]).toBeUndefined();
+    expect(spec.paths["/api/openapi.json"]).toBeUndefined();
     expect(Object.keys(spec.paths).sort()).toEqual([
       "/api/v1/batch", "/api/v1/fetch-logs", "/api/v1/health", "/api/v1/health/live",
       "/api/v1/hot/{sourceId}", "/api/v1/metrics", "/api/v1/sources",
@@ -49,6 +52,8 @@ describe("API 路由", () => {
     }
     expect(spec.paths["/api/v1/batch"].get.parameters.find((entry) => entry.name === "sources")).toMatchObject({ required: true, schema: { maxLength: 500 } });
     expect(spec.paths["/api/v1/fetch-logs"].get.parameters.find((entry) => entry.name === "status").schema.enum).toContain("not_modified");
+    expect(spec.paths["/api/v1/hot/{sourceId}"].get.responses[200].content["application/json"].schema.$ref).toBe("#/components/schemas/SourceResult");
+    expect(spec.components.schemas.SourceResult.properties.items.items.$ref).toBe("#/components/schemas/HotItem");
   });
 
   it("返回来源、真实热点和批量摘要", async () => {
@@ -71,7 +76,9 @@ describe("API 路由", () => {
   it("拒绝非法参数和未知来源", async () => {
     const app = await makeApp();
     expect((await app.inject("/api/v1/hot/missing")).statusCode).toBe(404);
-    expect((await app.inject("/api/v1/hot/hackernews?limit=99")).statusCode).toBe(400);
+    const invalidLimit = await app.inject("/api/v1/hot/hackernews?limit=99");
+    expect(invalidLimit.statusCode).toBe(400);
+    expect(invalidLimit.json()).toMatchObject({ code: "INVALID_REQUEST", sourceId: null, retryable: false });
     expect((await app.inject(`/api/v1/batch?sources=${Array.from({ length: 13 }, (_, index) => `x${index}`).join(",")}`)).statusCode).toBe(400);
     expect((await app.inject("/api/v1/fetch-logs?limit=101")).statusCode).toBe(400);
     expect((await app.inject("/api/v1/fetch-logs?cursor=invalid")).statusCode).toBe(400);
