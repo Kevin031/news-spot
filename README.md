@@ -36,6 +36,10 @@ AI 资讯分类使用 [AIHOT v1 接口](https://aihot.news/agent?tab=api) 的 `G
 
 本站会通过公开的 `/api/v1/hot/:sourceId` 和 `/api/v1/batch` 返回来源数据。启用 AIHOT 公网展示时需有覆盖页面和这些接口用途的书面授权。
 
+### Steam 游戏优惠
+
+首页直接展示 Steam 游戏优惠列表卡片，也可用“游戏优惠”分类单独筛选。浏览器先请求 [CheapShark Deals API](https://apidocs.cheapshark.com/) 发现 Steam 优惠（`storeID=1&onSale=1`），每批 8 款；随后本站 API 按 `steamAppID` 批量查询 Steam 的中国区 `price_overview`，用实际人民币现价、原价和折扣展示。服务端逐个请求 `l=schinese&filters=basic` 获取名称，优先显示 Steam 提供的简体中文名；未提供或请求失败时显示 CheapShark 原标题。仅保留 Steam 确认在国区打折的游戏；缩略图来自 CheapShark，失效时显示占位。桌面端卡片最高 80vh，列表在卡片内滚动；滚动至底部时自动获取下一批，直到上游没有更多记录，无需手动点击加载按钮。点击优惠仍使用 CheapShark 要求的 redirect 链接。Steam 价格由后端缓存 10 分钟，名称缓存 24 小时；此卡片不参与新闻来源的定时抓取、抓取日志或来源可用数统计。Steam 商店 `appdetails` 未列入公开 Web API 文档，接口变化时会明确显示错误，不会用美元价格冒充国区价格。实际售价请以商店页面为准。
+
 ## 本地开发
 
 要求 Node.js 22 及以上、pnpm 10.33.0。
@@ -77,6 +81,7 @@ OpenAPI 文档由 `@fastify/swagger` 根据实际路由 schema 动态生成；�
 | `GET /api/v1/hot/:sourceId?limit=12` | 单来源热点 |
 | `GET /api/v1/batch?sources=a,b&limit=12` | 最多 12 个来源的部分成功批量响应 |
 | `GET /api/v1/fetch-logs` | 最近 30 天的抓取日志，支持 `sourceId`、`status`、`cursor`、`limit` 筛选和分页 |
+| `GET /api/v1/steam-prices?appids=620,1057090` | 最多批量查询 8 款游戏的 Steam 中国区价格和本地化名称，金额单位为人民币分 |
 | `GET /api/v1/health/live` | 容器存活检查 |
 | `GET /api/v1/health` | 数据库和来源就绪状态 |
 | `GET /api/v1/metrics` | 无敏感信息的来源成功率与耗时 |

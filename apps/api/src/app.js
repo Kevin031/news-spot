@@ -13,9 +13,11 @@ import { healthRoutes } from "./routes/health.js";
 import { hotRoutes } from "./routes/hot.js";
 import { metricsRoutes } from "./routes/metrics.js";
 import { sourcesRoutes } from "./routes/sources.js";
+import { steamPriceRoutes } from "./routes/steam-prices.js";
 import { loadEnv } from "./config/env.js";
 import { createRuntime } from "./runtime.js";
 import { sharedSchemas } from "./route-schemas.js";
+import { createSteamPriceService } from "./services/steam-price-service.js";
 
 export async function buildApp(options = {}) {
   const env = options.env ?? loadEnv();
@@ -36,6 +38,7 @@ export async function buildApp(options = {}) {
       { name: "热点", description: "来源与热点内容" },
       { name: "运行状态", description: "健康检查与统计" },
       { name: "抓取日志", description: "抓取记录与分页" },
+      { name: "游戏优惠", description: "Steam 中国区价格" },
     ],
   } });
   for (const [name, schema] of Object.entries(sharedSchemas)) app.addSchema({ $id: name, ...schema });
@@ -44,6 +47,7 @@ export async function buildApp(options = {}) {
   const { db, cache, metrics, registry, hotService, fetchLogs } = runtime;
   const context = {
     env, db, cache, metrics, registry, hotService, fetchLogs,
+    steamPrices: createSteamPriceService({ fetchImpl: options.fetchImpl, now: options.now }),
     apiError: (request, code, message, sourceId = null, retryable = false) => ({ code, message, sourceId, retryable, requestId: request.id }),
   };
 
@@ -59,6 +63,7 @@ export async function buildApp(options = {}) {
   await app.register(healthRoutes, context);
   await app.register(metricsRoutes, context);
   await app.register(fetchLogsRoutes, context);
+  await app.register(steamPriceRoutes, context);
   await app.register(apiDocsRoutes);
 
   const webRoot = env.WEB_DIST_PATH ? resolve(env.WEB_DIST_PATH) : resolve(process.cwd(), "apps/web/dist");

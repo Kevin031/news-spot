@@ -5,6 +5,7 @@ import AppIcon from "./components/AppIcon.vue";
 import CategoryTabs from "./components/CategoryTabs.vue";
 import SearchDialog from "./components/SearchDialog.vue";
 import SourceCard from "./components/SourceCard.vue";
+import SteamDeals from "./components/SteamDeals.vue";
 import FetchLogsDialog from "./components/FetchLogsDialog.vue";
 import { useSources } from "./composables/useSources.js";
 import { orderSourcesByAvailability } from "./utils/source-order.js";
@@ -16,6 +17,7 @@ const categories = [
   { id: "world", name: "国际" },
   { id: "finance", name: "财经" },
   { id: "ai", name: "AI 资讯" },
+  { id: "games", name: "游戏优惠" },
 ];
 const activeCategory = ref("all");
 const search = ref("");
@@ -25,7 +27,7 @@ const layout = ref(localStorage.getItem("news-spot-layout") || "grid");
 const theme = ref(localStorage.getItem("news-spot-theme") || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 const { sources, results, loading, load, refreshSource, refreshAll, stop } = useSources();
 
-const categoryCounts = computed(() => Object.fromEntries(categories.map((category) => [category.id, category.id === "all" ? sources.value.length : sources.value.filter((source) => source.category === category.id).length])));
+const categoryCounts = computed(() => Object.fromEntries(categories.map((category) => [category.id, category.id === "all" ? sources.value.length + 1 : category.id === "games" ? 1 : sources.value.filter((source) => source.category === category.id).length])));
 const visibleCategories = computed(() => categories.filter((category) => category.id !== "ai" || categoryCounts.value.ai > 0));
 const visibleSources = computed(() => orderSourcesByAvailability(
   sources.value.filter((source) => activeCategory.value === "all" || source.category === activeCategory.value),
@@ -81,11 +83,8 @@ onBeforeUnmount(() => { window.removeEventListener("keydown", onKeydown); stop()
         </div>
       </section>
 
-      <div v-if="sources.length === 0 && loading" class="initial-loading" role="status">
-        <span class="loader" />
-        正在连接真实数据源
-      </div>
-      <div v-else :class="['source-grid', `source-grid--${layout}`]">
+      <div :class="['source-grid', `source-grid--${layout}`, { 'source-grid--games': activeCategory === 'games' }]">
+        <SteamDeals v-show="activeCategory === 'all' || activeCategory === 'games'" :active="activeCategory === 'all' || activeCategory === 'games'" />
         <SourceCard
           v-for="source in visibleSources"
           :key="source.id"
@@ -95,7 +94,8 @@ onBeforeUnmount(() => { window.removeEventListener("keydown", onKeydown); stop()
           @refresh="refreshSource(source.id)"
         />
       </div>
-      <div v-if="!loading && visibleSources.length === 0" class="page-empty">当前分类还没有已启用的数据源。</div>
+      <div v-if="sources.length === 0 && loading && activeCategory !== 'games'" class="initial-loading" role="status"><span class="loader" />正在连接真实数据源</div>
+      <div v-if="!loading && visibleSources.length === 0 && activeCategory !== 'all' && activeCategory !== 'games'" class="page-empty">当前分类还没有已启用的数据源。</div>
     </main>
 
     <SearchDialog v-model:open="searchOpen" v-model:query="search" :results="searchResults" />

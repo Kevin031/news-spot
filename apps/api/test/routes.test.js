@@ -45,7 +45,7 @@ describe("API 路由", () => {
     expect(spec.paths["/api/openapi.json"]).toBeUndefined();
     expect(Object.keys(spec.paths).sort()).toEqual([
       "/api/v1/batch", "/api/v1/fetch-logs", "/api/v1/health", "/api/v1/health/live",
-      "/api/v1/hot/{sourceId}", "/api/v1/metrics", "/api/v1/sources",
+      "/api/v1/hot/{sourceId}", "/api/v1/metrics", "/api/v1/sources", "/api/v1/steam-prices",
     ].sort());
     for (const path of Object.keys(spec.paths)) {
       expect(app.hasRoute({ method: "GET", url: path.replace("{sourceId}", ":sourceId") })).toBe(true);
@@ -82,6 +82,21 @@ describe("API 路由", () => {
     expect((await app.inject(`/api/v1/batch?sources=${Array.from({ length: 13 }, (_, index) => `x${index}`).join(",")}`)).statusCode).toBe(400);
     expect((await app.inject("/api/v1/fetch-logs?limit=101")).statusCode).toBe(400);
     expect((await app.inject("/api/v1/fetch-logs?cursor=invalid")).statusCode).toBe(400);
+    expect((await app.inject("/api/v1/steam-prices?appids=bad")).statusCode).toBe(400);
+    expect((await app.inject(`/api/v1/steam-prices?appids=${Array.from({ length: 9 }, (_, index) => index + 1).join(",")}`)).statusCode).toBe(400);
+  });
+
+  it("通过本站接口返回 Steam 国区价格", async () => {
+    const env = loadEnv({ NODE_ENV: "test", DATABASE_PATH: ":memory:", LOG_LEVEL: "silent" });
+    const fetchImpl = async (url) => new Response(JSON.stringify(new URL(url).searchParams.get("filters") === "basic"
+      ? { "620": { success: true, data: { name: "传送门 2" } } }
+      : { "620": { success: true, data: { price_overview: { currency: "CNY", initial: 4200, final: 2100, discount_percent: 50 } } } }), { status: 200 });
+    const app = await buildApp({ env, databasePath: ":memory:", fetchImpl, sources: [], logger: false });
+    apps.push(app);
+    const response = await app.inject("/api/v1/steam-prices?appids=620,999");
+    expect(response.statusCode).toBe(200);
+    expect(response.json().prices["620"]).toMatchObject({ currency: "CNY", originalCents: 4200, finalCents: 2100, discountPercent: 50, localizedName: "传送门 2" });
+    expect(response.json().prices["999"]).toBeNull();
   });
 
   it("限制 CORS 并拒绝已停用的强制抓取参数", async () => {

@@ -31,7 +31,7 @@ function formatTime(value) { return value ? new Intl.DateTimeFormat("zh-CN", { y
     <div v-if="state === 'loading'" class="card-state skeleton-state" role="status"><span v-for="index in 6" :key="index" class="skeleton-line" /></div>
     <div v-else-if="state === 'error'" class="card-state"><strong>暂时无法获取数据</strong><p>{{ result?.error?.message || "请稍后重试" }}</p><button type="button" @click="$emit('refresh')">重新连接</button></div>
     <div v-else-if="filteredItems.length === 0" class="card-state"><strong>{{ query ? "没有匹配的热点" : "上游暂时没有内容" }}</strong><p>{{ query ? "尝试更换搜索关键词" : "数据源已连接，但当前返回空列表" }}</p></div>
-    <div v-else class="hot-list"><HotItemRow v-for="item in filteredItems" :key="item.id" :item="item" :query="query" /></div>
+    <div v-else class="hot-list" tabindex="0" :aria-label="`${source.name} 热点列表，滚动查看更多内容`"><HotItemRow v-for="item in filteredItems" :key="item.id" :item="item" :query="query" /></div>
     <footer class="card-footer"><span><span v-if="state === 'stale'">{{ result?.staleReason || "最近计划时段尚未更新" }} · </span>显示 {{ filteredItems.length }} 条<span v-if="result?.lastSuccessAt"> · 更新于 {{ formatTime(result.lastSuccessAt) }}</span></span><a :href="source.homeUrl" target="_blank" rel="noopener noreferrer">访问来源</a></footer>
   </article>
 </template>

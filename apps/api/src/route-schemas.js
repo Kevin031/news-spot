@@ -34,6 +34,12 @@ export const sharedSchemas = {
       timestamp: dateTime, results: { type: "array", items: ref("SourceResult") },
       summary: { type: "object", required: ["total", "success", "failed", "stale"], properties: { total: integer, success: integer, failed: integer, stale: integer } },
     } },
+    SteamPrice: { type: "object", nullable: true, required: ["currency", "originalCents", "finalCents", "discountPercent", "localizedName"], properties: {
+      currency: { ...string, enum: ["CNY"] }, originalCents: integer, finalCents: integer, discountPercent: integer, localizedName: nullableString,
+    } },
+    SteamPricesResponse: { type: "object", required: ["prices"], properties: {
+      prices: { type: "object", additionalProperties: ref("SteamPrice") },
+    } },
     WorkerSlot: { type: "object", nullable: true, required: ["key", "status", "startedAt", "finishedAt", "total", "success", "failed"], properties: {
       key: string, status: string, startedAt: dateTime, finishedAt: nullableDateTime, total: integer, success: integer, failed: integer,
     } },
