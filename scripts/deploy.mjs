@@ -1,10 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { delimiter, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
 const dryRun = process.argv.includes("--dry-run");
+const voltaPnpm = process.env.VOLTA_HOME && resolve(process.env.VOLTA_HOME, "bin/pnpm");
+const pnpmCommand = voltaPnpm && existsSync(voltaPnpm) ? voltaPnpm : "pnpm";
 
 function loadEnvFile(file) {
   if (!existsSync(file)) return;
@@ -23,6 +25,9 @@ function loadEnvFile(file) {
 const configFile = process.env.DEPLOY_CONFIG_FILE || resolve(homedir(), ".config/news-spot/deploy.env");
 loadEnvFile(configFile);
 loadEnvFile(resolve(root, ".env.deploy"));
+const childEnv = pnpmCommand !== "pnpm"
+  ? { ...process.env, PATH: `${resolve(process.env.VOLTA_HOME, "bin")}${delimiter}${process.env.PATH || ""}` }
+  : process.env;
 
 const legacyTarget = process.env.DEPLOY_USER && process.env.DEPLOY_HOST
   ? `${process.env.DEPLOY_USER}@${process.env.DEPLOY_HOST}`
@@ -71,7 +76,7 @@ if (config.port) sshArgs.push("-p", config.port);
 function run(command, args, options = {}) {
   console.log(`\n> ${options.visible || `${command} ${args.join(" ")}`}`);
   if (dryRun) return;
-  const result = spawnSync(command, args, { cwd: root, stdio: "inherit", env: process.env });
+  const result = spawnSync(command, args, { cwd: root, stdio: "inherit", env: childEnv });
   if (result.error) fail(`${command} 无法执行：${result.error.message}`);
   if (result.status !== 0) process.exit(result.status || 1);
 }
@@ -91,10 +96,10 @@ console.log(`应用端口：127.0.0.1:${config.appPort}`);
 console.log(`模式：${dryRun ? "dry-run" : "正式部署"}`);
 
 if (!dryRun) {
-  run("pnpm", ["lint"]);
-  run("pnpm", ["typecheck"]);
-  run("pnpm", ["test"]);
-  run("pnpm", ["build"]);
+  run(pnpmCommand, ["lint"], { visible: "pnpm lint" });
+  run(pnpmCommand, ["typecheck"], { visible: "pnpm typecheck" });
+  run(pnpmCommand, ["test"], { visible: "pnpm test" });
+  run(pnpmCommand, ["build"], { visible: "pnpm build" });
   run("ssh", [...sshArgs, config.target, "true"], { visible: "ssh <tencent-cloud> 检查连接" });
   mkdirSync(workPath, { recursive: true });
 }

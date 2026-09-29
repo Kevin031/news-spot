@@ -9,7 +9,14 @@ ENV COREPACK_NPM_REGISTRY=$NPM_REGISTRY
 ENV NPM_CONFIG_REGISTRY=$NPM_REGISTRY
 WORKDIR /app
 
-RUN corepack enable
+RUN sed -i \
+      -e 's|http://deb.debian.org/debian-security|http://mirrors.tuna.tsinghua.edu.cn/debian-security|' \
+      -e 's|http://deb.debian.org/debian|http://mirrors.tuna.tsinghua.edu.cn/debian|' \
+      /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Retries=3 update \
+    && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/api/package.json apps/api/package.json
