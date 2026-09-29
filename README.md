@@ -2,7 +2,9 @@
 
 News Spot 是一个只展示真实上游数据的热点聚合站。前端使用 Vite 8、Vue 3 和 Less，API 使用 Fastify；数据源失败时会明确显示最近成功快照或错误，不会用 Mock 数据填充生产页面。
 
-[在线站点](https://hot-spots.kevinlau.cn) · [API 文档](https://hot-spots.kevinlau.cn/api/docs) · [OpenAPI JSON](https://hot-spots.kevinlau.cn/api/openapi.json)
+[作者演示站](https://hot-spots.kevinlau.cn) · [演示站 API 文档](https://hot-spots.kevinlau.cn/api/docs) · [演示站 OpenAPI JSON](https://hot-spots.kevinlau.cn/api/openapi.json)
+
+这是可自行部署的项目。上述站点由作者维护，仅供体验；部署者可使用自己的域名、端口和环境配置。
 
 ## 目录
 
@@ -40,10 +42,10 @@ News Spot 是一个只展示真实上游数据的热点聚合站。前端使用 
 
 Bilibili 接口可能返回风控状态。服务不会尝试绕过访问控制；已有成功快照时标记为旧数据继续展示，冷启动失败时显示来源不可用。
 
-生产环境会根据目标机的真实连通性独立启停来源：
+部署时可根据目标机的实际连通性独立启停来源：
 
-- V2EX 和 BBC 在腾讯云连续失败时通过 `SOURCE_*_ENABLED=false` 暂停。
-- Bilibili 保持启用；能取得真实数据时正常展示，失败时显示旧快照或错误，并排到当前分类底部。
+- 作者演示站所在的腾讯云服务器上，V2EX 和 BBC 连续失败时通过 `SOURCE_*_ENABLED=false` 暂停。
+- 作者演示站保持 Bilibili 启用；能取得真实数据时正常展示，失败时显示旧快照或错误，并排到当前分类底部。
 - MarketWatch 等 RSS 来源只使用 feed 返回的标题、摘要和原文链接，不抓取正文或绕过付费限制。
 
 ### AI 资讯板块
@@ -55,17 +57,17 @@ AI 资讯分类使用 [AIHOT v1 接口](https://aihot.news/agent?tab=api)：
 | 近期精选 | `GET /api/v1/items?mode=selected&window=24h&limit=20` |
 | 当前热点榜 | `GET /api/v1/hot-topics` |
 
-条目主链接指向原始信源，次要链接保留 AIHOT 署名；精选摘要由 AIHOT 的 AI 生成，涉及重要事实请回原文核对。AIHOT 的内容评分和热点榜信源数不作为本站“热度”分数。
+条目主链接指向原始信源，次要链接保留 AIHOT 署名；精选摘要由 AIHOT 的 AI 生成，涉及重要事实请回原文核对。AIHOT 的内容评分和热点榜信源数不作为应用“热度”分数。
 
 两个来源默认关闭，可分别设置 `SOURCE_AIHOT_SELECTED_ENABLED=true`、`SOURCE_AIHOT_TOPICS_ENABLED=true` 启用。Worker 按配置的上午、下午时段抓取；后续请求使用 ETag 条件请求，304 复用已验证内容，429 按 `Retry-After` 暂停请求，失败时保留最后一次真实成功快照。来源异常可关闭对应开关并重启服务，其他来源不受影响。
 
-本站会通过公开的 `/api/v1/hot/:sourceId` 和 `/api/v1/batch` 返回来源数据。启用 AIHOT 公网展示时需有覆盖页面和这些接口用途的书面授权。
+应用会通过公开的 `/api/v1/hot/:sourceId` 和 `/api/v1/batch` 返回来源数据。启用 AIHOT 公网展示时需有覆盖页面和这些接口用途的书面授权。
 
 ### Steam 游戏优惠
 
 首页直接展示 Steam 游戏优惠列表卡片，也可用“游戏优惠”分类单独筛选。
 
-- 浏览器先请求 [CheapShark Deals API](https://apidocs.cheapshark.com/) 发现 Steam 优惠（`storeID=1&onSale=1`），每批 8 款；随后本站 API 按 `steamAppID` 批量查询 Steam 中国区的 `price_overview`，展示人民币现价、原价和折扣。
+- 浏览器先请求 [CheapShark Deals API](https://apidocs.cheapshark.com/) 发现 Steam 优惠（`storeID=1&onSale=1`），每批 8 款；随后应用 API 按 `steamAppID` 批量查询 Steam 中国区的 `price_overview`，展示人民币现价、原价和折扣。
 - 服务端逐个请求 `l=schinese&filters=basic` 获取名称，优先显示 Steam 提供的简体中文名；未提供或请求失败时显示 CheapShark 原标题。仅保留 Steam 确认在国区打折的游戏。
 - 缩略图来自 CheapShark，失效时显示占位。桌面端卡片最高 80vh，列表在卡片内滚动；滚动至底部时自动获取下一批，直到上游没有更多记录，无需手动点击加载按钮。点击优惠仍使用 CheapShark 要求的 redirect 链接。
 - Steam 价格由后端缓存 10 分钟，名称缓存 24 小时；此卡片不参与新闻来源的定时抓取、抓取日志或来源可用数统计。
@@ -102,14 +104,14 @@ pnpm --filter @news-spot/api test:smoke
 PLAYWRIGHT_HTML_OPEN=never pnpm test:e2e
 ```
 
-在线 smoke 会访问真实上游，不作为每次提交的稳定 CI 门禁。默认通过标准是至少 8 个来源返回非空真实数据；生产发布使用 `SMOKE_MIN_SUCCESS=10`。
+在线 smoke 会访问真实上游，不作为每次提交的稳定 CI 门禁。默认通过标准是至少 8 个来源返回非空真实数据；作者演示站发布时使用 `SMOKE_MIN_SUCCESS=10`。
 
 ## API
 
 接口文档支持填写参数并直接发送请求：
 
 - 本地：[API 文档](http://localhost:5173/api/docs)，OpenAPI JSON 地址为 `http://localhost:5173/api/openapi.json`。
-- 生产：[API 文档](https://hot-spots.kevinlau.cn/api/docs)，[OpenAPI JSON](https://hot-spots.kevinlau.cn/api/openapi.json) 可导入其他 API 工具。
+- 作者演示站：[API 文档](https://hot-spots.kevinlau.cn/api/docs)，[OpenAPI JSON](https://hot-spots.kevinlau.cn/api/openapi.json) 可导入其他 API 工具。自行部署后，将域名替换为自己的站点地址。
 
 OpenAPI 文档由 `@fastify/swagger` 根据实际路由 schema 动态生成；请求参数及响应结构在路由和共享 schema 中维护，`/api/docs` 读取同一份生成结果。
 
@@ -145,7 +147,7 @@ docker compose up --build -d
 docker compose ps
 ```
 
-生产页面和 API 统一使用 `http://localhost:3000`。API 与 Worker 共享命名卷 `news-spot-data` 中的 SQLite，容器重建后仍会保留。可运行 `pnpm --filter @news-spot/api worker:once` 单次手动抓取。
+使用根目录的 `compose.yaml` 启动后，页面和 API 默认通过 `http://localhost:3000` 访问。API 与 Worker 共享命名卷 `news-spot-data` 中的 SQLite，容器重建后仍会保留。可运行 `pnpm --filter @news-spot/api worker:once` 单次手动抓取。对外提供服务时，请使用自己的域名配置反向代理和 HTTPS。
 
 回滚时用上一版本镜像替换 `compose.yaml` 中的 `image`，然后执行：
 
@@ -155,9 +157,9 @@ docker compose up -d
 
 不要删除数据卷。若必须清空缓存，先停止容器并备份 SQLite，再显式删除卷。
 
-### 发布到 hot-spots.kevinlau.cn
+### 作者演示站的自动发布
 
-项目提供基于 SSH、rsync 和 Docker Compose 的发布命令。服务器需预先安装 Docker、Docker Compose、rsync，并确保部署用户有权执行 `docker` 命令。
+以下流程用于作者演示站，也可作为自建部署的参考。`scripts/deploy.mjs` 中的默认 SSH 目标、目录、端口和域名是作者演示站的配置；使用前请在自己的部署配置文件中覆盖。服务器需预先安装 Docker、Docker Compose、rsync，并确保部署用户有权执行 `docker` 命令。
 
 首次配置用户级部署文件：
 
@@ -166,7 +168,7 @@ mkdir -p ~/.config/news-spot
 cp .env.deploy.example ~/.config/news-spot/deploy.env
 ```
 
-默认通过 `~/.ssh/config` 中的 `tencent-cloud` alias 连接服务器，发布到 `/opt/news-spot`，应用仅监听 `127.0.0.1:20245`。如需覆盖抓取源、管理员密钥等生产配置，可新建不会提交到 Git 的 `.env.production`，并在用户级部署配置中启用：
+示例默认通过 `~/.ssh/config` 中的 `tencent-cloud` alias 连接服务器，发布到 `/opt/news-spot`，应用仅监听 `127.0.0.1:20245`。自行部署时，至少修改 `DEPLOY_SSH_TARGET`、`DEPLOY_PATH`、`DEPLOY_APP_PORT` 和 `DEPLOY_DOMAIN`。如需覆盖抓取源、管理员密钥等环境配置，可新建不会提交到 Git 的 `.env.production`，并在用户级部署配置中启用：
 
 ```dotenv
 DEPLOY_ENV_FILE=.env.production
@@ -184,9 +186,9 @@ npm run deploy:dry-run
 npm run deploy
 ```
 
-正式发布会先执行 lint、类型检查、单元测试和构建，再在本机构建 `linux/amd64` 镜像、压缩上传，并在腾讯云载入镜像。API 与 Worker 通过健康检查后才切换版本；失败时恢复上一版本的 Compose 和镜像。SQLite 数据保存在独立命名卷中。
+正式发布会先执行 lint、类型检查、单元测试和构建，再在本机构建 `linux/amd64` 镜像、压缩上传，并在目标服务器载入镜像。API 与 Worker 通过健康检查后才切换版本；失败时恢复上一版本的 Compose 和镜像。SQLite 数据保存在独立命名卷中。
 
-可参考 [Nginx 配置示例](deploy/nginx/hot-spots.kevinlau.cn.conf.example) 配置反向代理和 HTTPS 证书；如果服务器已有代理配置，可在 `.env.deploy` 中设置 `DEPLOY_PROXY_RELOAD_COMMAND`。发布结束会检查 `https://hot-spots.kevinlau.cn/api/v1/health/live`，成功响应后命令才会正常退出。
+可参考 [作者演示站的 Nginx 配置示例](deploy/nginx/hot-spots.kevinlau.cn.conf.example) 配置反向代理和 HTTPS 证书；如果服务器已有代理配置，可在部署配置文件中设置 `DEPLOY_PROXY_RELOAD_COMMAND`。发布结束会检查 `https://<DEPLOY_DOMAIN>/api/v1/health/live`，成功响应后命令才会正常退出。
 
 ## 环境变量
 
