@@ -2,10 +2,24 @@
 
 News Spot 是一个只展示真实上游数据的热点聚合站。前端使用 Vite 8、Vue 3 和 Less，API 使用 Fastify；数据源失败时会明确显示最近成功快照或错误，不会用 Mock 数据填充生产页面。
 
+[在线站点](https://hot-spots.kevinlau.cn) · [API 文档](https://hot-spots.kevinlau.cn/api/docs) · [OpenAPI JSON](https://hot-spots.kevinlau.cn/api/openapi.json)
+
+## 目录
+
+- [已接入来源](#已接入来源)
+- [本地开发](#本地开发)
+- [验证命令](#验证命令)
+- [API](#api)
+- [定时抓取与失败策略](#定时抓取与失败策略)
+- [Docker 部署](#docker-部署)
+- [环境变量](#环境变量)
+- [告警建议](#告警建议)
+- [使用边界](#使用边界)
+
 ## 已接入来源
 
 | 来源 | 获取方式 | 风险等级 |
-|---|---|---:|---:|
+| --- | --- | ---: |
 | Hacker News | 官方 Firebase API | 低 |
 | V2EX | 公开 API | 低 |
 | GitHub 新锐项目 | 官方 REST Search API | 低 |
@@ -26,11 +40,22 @@ News Spot 是一个只展示真实上游数据的热点聚合站。前端使用 
 
 Bilibili 接口可能返回风控状态。服务不会尝试绕过访问控制；已有成功快照时标记为旧数据继续展示，冷启动失败时显示来源不可用。
 
-生产环境会根据目标机的真实连通性独立启停来源。V2EX 和 BBC 在腾讯云连续失败时通过 `SOURCE_*_ENABLED=false` 暂停；Bilibili 保持启用，能取得真实数据时正常展示，失败时显示旧快照或错误并排到当前分类底部。MarketWatch 等 RSS 来源只使用 feed 返回的标题、摘要和原文链接，不抓取正文或绕过付费限制。
+生产环境会根据目标机的真实连通性独立启停来源：
+
+- V2EX 和 BBC 在腾讯云连续失败时通过 `SOURCE_*_ENABLED=false` 暂停。
+- Bilibili 保持启用；能取得真实数据时正常展示，失败时显示旧快照或错误，并排到当前分类底部。
+- MarketWatch 等 RSS 来源只使用 feed 返回的标题、摘要和原文链接，不抓取正文或绕过付费限制。
 
 ### AI 资讯板块
 
-AI 资讯分类使用 [AIHOT v1 接口](https://aihot.news/agent?tab=api) 的 `GET /api/v1/items?mode=selected&window=24h&limit=20` 和 `GET /api/v1/hot-topics`，分别展示近期精选和当前热点榜。条目主链接指向原始信源，次要链接保留 AIHOT 署名；精选摘要由 AIHOT 的 AI 生成，涉及重要事实请回原文核对。AIHOT 的内容评分和热点榜信源数不作为本站“热度”分数。
+AI 资讯分类使用 [AIHOT v1 接口](https://aihot.news/agent?tab=api)：
+
+| 内容 | 接口 |
+| --- | --- |
+| 近期精选 | `GET /api/v1/items?mode=selected&window=24h&limit=20` |
+| 当前热点榜 | `GET /api/v1/hot-topics` |
+
+条目主链接指向原始信源，次要链接保留 AIHOT 署名；精选摘要由 AIHOT 的 AI 生成，涉及重要事实请回原文核对。AIHOT 的内容评分和热点榜信源数不作为本站“热度”分数。
 
 两个来源默认关闭，可分别设置 `SOURCE_AIHOT_SELECTED_ENABLED=true`、`SOURCE_AIHOT_TOPICS_ENABLED=true` 启用。Worker 按配置的上午、下午时段抓取；后续请求使用 ETag 条件请求，304 复用已验证内容，429 按 `Retry-After` 暂停请求，失败时保留最后一次真实成功快照。来源异常可关闭对应开关并重启服务，其他来源不受影响。
 
@@ -38,7 +63,14 @@ AI 资讯分类使用 [AIHOT v1 接口](https://aihot.news/agent?tab=api) 的 `G
 
 ### Steam 游戏优惠
 
-首页直接展示 Steam 游戏优惠列表卡片，也可用“游戏优惠”分类单独筛选。浏览器先请求 [CheapShark Deals API](https://apidocs.cheapshark.com/) 发现 Steam 优惠（`storeID=1&onSale=1`），每批 8 款；随后本站 API 按 `steamAppID` 批量查询 Steam 的中国区 `price_overview`，用实际人民币现价、原价和折扣展示。服务端逐个请求 `l=schinese&filters=basic` 获取名称，优先显示 Steam 提供的简体中文名；未提供或请求失败时显示 CheapShark 原标题。仅保留 Steam 确认在国区打折的游戏；缩略图来自 CheapShark，失效时显示占位。桌面端卡片最高 80vh，列表在卡片内滚动；滚动至底部时自动获取下一批，直到上游没有更多记录，无需手动点击加载按钮。点击优惠仍使用 CheapShark 要求的 redirect 链接。Steam 价格由后端缓存 10 分钟，名称缓存 24 小时；此卡片不参与新闻来源的定时抓取、抓取日志或来源可用数统计。Steam 商店 `appdetails` 未列入公开 Web API 文档，接口变化时会明确显示错误，不会用美元价格冒充国区价格。实际售价请以商店页面为准。
+首页直接展示 Steam 游戏优惠列表卡片，也可用“游戏优惠”分类单独筛选。
+
+- 浏览器先请求 [CheapShark Deals API](https://apidocs.cheapshark.com/) 发现 Steam 优惠（`storeID=1&onSale=1`），每批 8 款；随后本站 API 按 `steamAppID` 批量查询 Steam 中国区的 `price_overview`，展示人民币现价、原价和折扣。
+- 服务端逐个请求 `l=schinese&filters=basic` 获取名称，优先显示 Steam 提供的简体中文名；未提供或请求失败时显示 CheapShark 原标题。仅保留 Steam 确认在国区打折的游戏。
+- 缩略图来自 CheapShark，失效时显示占位。桌面端卡片最高 80vh，列表在卡片内滚动；滚动至底部时自动获取下一批，直到上游没有更多记录，无需手动点击加载按钮。点击优惠仍使用 CheapShark 要求的 redirect 链接。
+- Steam 价格由后端缓存 10 分钟，名称缓存 24 小时；此卡片不参与新闻来源的定时抓取、抓取日志或来源可用数统计。
+
+Steam 商店 `appdetails` 未列入公开 Web API 文档，接口变化时会明确显示错误，不会用美元价格冒充国区价格。实际售价请以商店页面为准。
 
 ## 本地开发
 
@@ -49,12 +81,15 @@ pnpm install
 pnpm dev
 ```
 
-- 开发 Web：`http://localhost:5173`
-- 开发 API：`http://127.0.0.1:3001`，使用独立的 `data/dev-news.db`
-- 生产服务入口：`http://localhost:3000`（本地运行生产容器时）
+| 服务 | 地址 | 说明 |
+| --- | --- | --- |
+| 开发 Web | `http://localhost:5173` | Vite 将 `/api` 代理到开发 API |
+| 开发 API | `http://127.0.0.1:3001` | 使用独立的 `data/dev-news.db` |
+| 生产服务 | `http://localhost:3000` | 本地运行生产容器时使用 |
 
-开发环境由 Vite 将 `/api` 固定代理到本机开发 API，不会因 3000 端口上运行着生产服务而误连。生产构建默认请求同源 `/api`，由部署后的 Fastify 服务提供正式后端；如前后端分开部署，可在构建时设置 `VITE_API_BASE`。若修改了开发脚本或代理配置，请重启 `npm run dev`。
-单终端运行时，前端直接接收终端输入：输入 `r` 后回车可重启 Vite，输入 `h` 后回车可查看快捷键。后端文件变更由 Node.js watch 模式自动重启。也可以分别在两个终端运行 `pnpm --filter @news-spot/api dev` 和 `pnpm --filter @news-spot/web dev`。
+开发环境将 `/api` 固定代理到本机开发 API，不会误连 3000 端口上的生产服务。生产构建默认请求同源 `/api`，由 Fastify 提供后端；前后端分开部署时，可在构建时设置 `VITE_API_BASE`。
+
+修改开发脚本或代理配置后，请重启 `pnpm dev`。单终端运行时，输入 `r` 并回车可重启 Vite，输入 `h` 并回车可查看快捷键；后端文件变更由 Node.js watch 模式自动重启。也可以分别运行 `pnpm --filter @news-spot/api dev` 和 `pnpm --filter @news-spot/web dev`。
 
 ## 验证命令
 
@@ -71,7 +106,10 @@ PLAYWRIGHT_HTML_OPEN=never pnpm test:e2e
 
 ## API
 
-在线接口文档：本地开发访问 [http://localhost:5173/api/docs](http://localhost:5173/api/docs)，生产环境访问 [https://hot-spots.kevinlau.cn/api/docs](https://hot-spots.kevinlau.cn/api/docs)。页面可填写参数并直接发送请求；[OpenAPI JSON](https://hot-spots.kevinlau.cn/api/openapi.json) 可导入其他 API 工具。本地原始文档地址为 `http://localhost:5173/api/openapi.json`。
+接口文档支持填写参数并直接发送请求：
+
+- 本地：[API 文档](http://localhost:5173/api/docs)，OpenAPI JSON 地址为 `http://localhost:5173/api/openapi.json`。
+- 生产：[API 文档](https://hot-spots.kevinlau.cn/api/docs)，[OpenAPI JSON](https://hot-spots.kevinlau.cn/api/openapi.json) 可导入其他 API 工具。
 
 OpenAPI 文档由 `@fastify/swagger` 根据实际路由 schema 动态生成；请求参数及响应结构在路由和共享 schema 中维护，`/api/docs` 读取同一份生成结果。
 
@@ -119,46 +157,36 @@ docker compose up -d
 
 ### 发布到 hot-spots.kevinlau.cn
 
-项目提供基于 SSH、rsync 和 Docker Compose 的发布命令。服务器需预先安装
-Docker、Docker Compose、rsync，并确保部署用户有权执行 `docker` 命令。
+项目提供基于 SSH、rsync 和 Docker Compose 的发布命令。服务器需预先安装 Docker、Docker Compose、rsync，并确保部署用户有权执行 `docker` 命令。
 
-默认读取与隔壁项目一致的用户级部署配置。首次配置：
+首次配置用户级部署文件：
 
 ```bash
 mkdir -p ~/.config/news-spot
 cp .env.deploy.example ~/.config/news-spot/deploy.env
 ```
 
-默认通过 `~/.ssh/config` 中的 `tencent-cloud` alias 连接服务器，发布到
-`/opt/news-spot`，应用仅监听 `127.0.0.1:20245`。如生产环境需要覆盖抓取源、
-管理员密钥等配置，可新建不会提交到 Git 的 `.env.production`，并在用户级
-部署配置中启用：
+默认通过 `~/.ssh/config` 中的 `tencent-cloud` alias 连接服务器，发布到 `/opt/news-spot`，应用仅监听 `127.0.0.1:20245`。如需覆盖抓取源、管理员密钥等生产配置，可新建不会提交到 Git 的 `.env.production`，并在用户级部署配置中启用：
 
 ```dotenv
 DEPLOY_ENV_FILE=.env.production
 ```
 
-先预演发布流程，不连接或修改服务器：
+预演发布流程，不连接或修改服务器：
 
 ```bash
 npm run deploy:dry-run
 ```
 
-确认无误后正式发布：
+正式发布：
 
 ```bash
 npm run deploy
 ```
 
-正式发布会先执行 lint、类型检查、单元测试和构建，然后在本机构建
-`linux/amd64` 镜像、压缩上传、在腾讯云载入镜像并等待 API 与 Worker 健康检查。SQLite 数据
-保存在独立命名卷中。容器健康检查失败时会恢复上一版本 Compose 和镜像。
+正式发布会先执行 lint、类型检查、单元测试和构建，再在本机构建 `linux/amd64` 镜像、压缩上传，并在腾讯云载入镜像。API 与 Worker 通过健康检查后才切换版本；失败时恢复上一版本的 Compose 和镜像。SQLite 数据保存在独立命名卷中。
 
-可参考
-[`deploy/nginx/hot-spots.kevinlau.cn.conf.example`](deploy/nginx/hot-spots.kevinlau.cn.conf.example)
-配置 Nginx 和 HTTPS 证书；如果服务器已有代理配置，可在 `.env.deploy` 中设置
-`DEPLOY_PROXY_RELOAD_COMMAND`。发布结束会检查
-`https://hot-spots.kevinlau.cn/api/v1/health/live`，成功响应后命令才会正常退出。
+可参考 [Nginx 配置示例](deploy/nginx/hot-spots.kevinlau.cn.conf.example) 配置反向代理和 HTTPS 证书；如果服务器已有代理配置，可在 `.env.deploy` 中设置 `DEPLOY_PROXY_RELOAD_COMMAND`。发布结束会检查 `https://hot-spots.kevinlau.cn/api/v1/health/live`，成功响应后命令才会正常退出。
 
 ## 环境变量
 
