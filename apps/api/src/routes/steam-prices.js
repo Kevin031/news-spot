@@ -13,7 +13,8 @@ export async function steamPriceRoutes(app, context) {
     if (ids.length > 8) return reply.code(400).send(context.apiError(request, "INVALID_REQUEST", "一次最多查询 8 款游戏", null, false));
     try {
       return { prices: await context.steamPrices.getPrices(ids) };
-    } catch {
+    } catch (error) {
+      request.log.warn({ err: error, appIds: ids }, "Steam 国区价格查询失败");
       return reply.code(502).send(context.apiError(request, "STEAM_UNAVAILABLE", "Steam 国区价格暂时不可用", null, true));
     }
   });

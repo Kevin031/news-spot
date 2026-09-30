@@ -28,8 +28,11 @@ News Spot 是一个只展示真实上游数据的热点聚合站。前端使用 
 | BBC World | 官方 RSS | 低 |
 | IT之家 | 官方站 RSS | 低 |
 | 哔哩哔哩排行榜 | 公开 Web JSON 接口 | 中 |
+| 豆瓣热门电影 | 豆瓣选电影公开列表接口 | 中 |
+| 豆瓣热门电视剧 | 豆瓣选剧集公开列表接口 | 中 |
 | DEV Community | 官方 Forem API | 低 |
 | Stack Overflow | 官方 Stack Exchange API | 低 |
+| 中文维基热点 | Wikimedia Analytics 官方页面浏览量 API | 低 |
 | Lobsters | 站点 RSS | 低 |
 | 少数派 | 站点 RSS | 低 |
 | Solidot | 站点 RSS | 低 |
@@ -41,6 +44,10 @@ News Spot 是一个只展示真实上游数据的热点聚合站。前端使用 
 | AIHOT 热点榜（默认关闭） | AIHOT v1 公开 API | 中 |
 
 Bilibili 接口可能返回风控状态。服务不会尝试绕过访问控制；已有成功快照时标记为旧数据继续展示，冷启动失败时显示来源不可用。
+
+豆瓣电影和电视剧分别展示在“影视”分类的两个卡片中，按豆瓣热门列表顺序排列；列表展示作品海报，评分固定在右侧以黄色文字显示，不作为热度分数。豆瓣接口可能限制访问，失败时沿用已有成功快照或显示来源不可用。可分别用 `SOURCE_DOUBAN_MOVIES_ENABLED=false`、`SOURCE_DOUBAN_TV_ENABLED=false` 关闭。
+
+中文维基热点读取 `zh.wikipedia.org` 的每日最多浏览词条，过滤首页、搜索页等非词条页面。榜单按 UTC 日期结算，当前读取前日数据以避开生成延迟；每条显示统计日期和真实浏览量。它表示词条关注度，不代表新闻事件热度。请求会按 [Wikimedia Analytics API 访问规则](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/documentation/access-policy.html) 携带可识别的 User-Agent，可用 `SOURCE_WIKIPEDIA_ZH_ENABLED=false` 关闭。
 
 部署时可根据目标机的实际连通性独立启停来源：
 
@@ -67,10 +74,10 @@ AI 资讯分类使用 [AIHOT v1 接口](https://aihot.news/agent?tab=api)：
 
 首页直接展示 Steam 游戏优惠列表卡片，也可用“游戏优惠”分类单独筛选。
 
-- 浏览器先请求 [CheapShark Deals API](https://apidocs.cheapshark.com/) 发现 Steam 优惠（`storeID=1&onSale=1`），每批 8 款；随后应用 API 按 `steamAppID` 批量查询 Steam 中国区的 `price_overview`，展示人民币现价、原价和折扣。
-- 服务端逐个请求 `l=schinese&filters=basic` 获取名称，优先显示 Steam 提供的简体中文名；未提供或请求失败时显示 CheapShark 原标题。仅保留 Steam 确认在国区打折的游戏。
-- 缩略图来自 CheapShark，失效时显示占位。桌面端卡片最高 80vh，列表在卡片内滚动；滚动至底部时自动获取下一批，直到上游没有更多记录，无需手动点击加载按钮。点击优惠仍使用 CheapShark 要求的 redirect 链接。
-- Steam 价格由后端缓存 10 分钟，名称缓存 24 小时；此卡片不参与新闻来源的定时抓取、抓取日志或来源可用数统计。
+- Worker 在计划时段从 [CheapShark Deals API](https://apidocs.cheapshark.com/) 获取 Steam 优惠候选，批量查询 Steam 中国区的 `price_overview`，仅保存国区真实折扣及人民币价格。首次启动若缺少快照，也由 Worker 初始化；首页 API 始终只读 SQLite 快照。
+- Worker 逐个请求 `l=schinese&filters=basic` 获取名称，优先保存 Steam 提供的简体中文名；未提供或请求失败时保留 CheapShark 原标题。每次最多扫描 4 页候选并保存 40 款游戏。
+- 缩略图来自 CheapShark，失效时显示占位。桌面端卡片最高 80vh，列表在卡片内滚动；滚动至底部时从本站快照读取下一批。点击优惠仍使用 CheapShark 要求的 redirect 链接。
+- 快照保存在与其他来源相同的 SQLite 中，抓取失败时继续展示上次成功快照；价格查询缓存 10 分钟，名称缓存 24 小时。Steam 卡片不计入新闻来源的可用数统计。
 
 Steam 商店 `appdetails` 未列入公开 Web API 文档，接口变化时会明确显示错误，不会用美元价格冒充国区价格。实际售价请以商店页面为准。
 
@@ -86,10 +93,10 @@ pnpm dev
 | 服务 | 地址 | 说明 |
 | --- | --- | --- |
 | 开发 Web | `http://localhost:5173` | Vite 将 `/api` 代理到开发 API |
-| 开发 API | `http://127.0.0.1:3001` | 使用独立的 `data/dev-news.db` |
+| 开发 API | `http://127.0.0.1:3001` | 与开发 Worker 共用独立的 `data/dev-news.db` |
 | 生产服务 | `http://localhost:3000` | 本地运行生产容器时使用 |
 
-开发环境将 `/api` 固定代理到本机开发 API，不会误连 3000 端口上的生产服务。生产构建默认请求同源 `/api`，由 Fastify 提供后端；前后端分开部署时，可在构建时设置 `VITE_API_BASE`。
+`pnpm dev` 同时启动 Web、API 和 Worker。Worker 会生成 Steam 优惠快照。开发环境将 `/api` 固定代理到本机开发 API，不会误连 3000 端口上的生产服务。生产构建默认请求同源 `/api`，由 Fastify 提供后端；前后端分开部署时，可在构建时设置 `VITE_API_BASE`。
 
 修改开发脚本或代理配置后，请重启 `pnpm dev`。单终端运行时，输入 `r` 并回车可重启 Vite，输入 `h` 并回车可查看快捷键；后端文件变更由 Node.js watch 模式自动重启。也可以分别运行 `pnpm --filter @news-spot/api dev` 和 `pnpm --filter @news-spot/web dev`。
 
@@ -122,6 +129,7 @@ OpenAPI 文档由 `@fastify/swagger` 根据实际路由 schema 动态生成；�
 | `GET /api/v1/batch?sources=a,b&limit=12` | 最多 12 个来源的部分成功批量响应 |
 | `GET /api/v1/fetch-logs` | 最近 30 天的抓取日志，支持 `sourceId`、`status`、`cursor`、`limit` 筛选和分页 |
 | `GET /api/v1/steam-prices?appids=620,1057090` | 最多批量查询 8 款游戏的 Steam 中国区价格和本地化名称，金额单位为人民币分 |
+| `GET /api/v1/steam-deals?pageNumber=0` | 分页读取 Worker 保存的 Steam 国区优惠快照，不发起上游请求 |
 | `GET /api/v1/health/live` | 容器存活检查 |
 | `GET /api/v1/health` | 数据库和来源就绪状态 |
 | `GET /api/v1/metrics` | 无敏感信息的来源成功率与耗时 |
@@ -130,7 +138,7 @@ OpenAPI 文档由 `@fastify/swagger` 根据实际路由 schema 动态生成；�
 
 ## 定时抓取与失败策略
 
-- 独立 Worker 默认在北京时间每天 `09:00`、`15:00` 抓取所有启用的来源并写入 SQLite；启动时补跑最近未完成的时段。可用 `WORKER_RUN_TIMES`、`WORKER_TIME_ZONE` 配置时段。
+- 独立 Worker 默认在北京时间每天 `05:00`、`15:00` 抓取所有启用的来源并写入 SQLite；启动时补跑最近未完成的时段，若该时段已完成，则立即补抓所有尚无快照的启用来源。Steam 优惠也会在缺少快照时立即抓取。可用 `WORKER_RUN_TIMES`、`WORKER_TIME_ZONE` 配置时段。
 - 页面加载与“重新加载”只读取 SQLite。某来源没有任何快照时，API 才进行一次受租约保护的补抓，成功写库后返回。同一来源的并发补抓只执行一次。
 - 最近计划时段尚未更新时，页面展示已保存的旧数据与实际更新时间。抓取失败不覆盖旧快照。
 - 页头“抓取日志”按钮可查看定时、补抓及手动运行的结果，日志保留 30 天。`/api/v1/health` 报告 Worker 心跳、下次时段和最近时段结果。
@@ -197,7 +205,7 @@ npm run deploy
 - `GITHUB_TOKEN` 可选，用于提升官方 API 限额；失效时自动降级到匿名请求。
 - `CORS_ORIGINS` 是逗号分隔的允许来源。
 - `SOURCE_*_ENABLED` 可以关闭单个来源。
-- `WORKER_RUN_TIMES` 默认 `09:00,15:00`；`WORKER_TIME_ZONE` 默认 `Asia/Shanghai`。
+- `WORKER_RUN_TIMES` 默认 `05:00,15:00`；`WORKER_TIME_ZONE` 默认 `Asia/Shanghai`。已有部署若在持久化的 `.env` 中设置了旧时段，需同步更新该变量并重启 Worker。
 - `SMOKE_MIN_SUCCESS` 只用于在线 smoke，控制真实来源最低成功数。
 - 日志不记录 Token 或上游响应正文。
 

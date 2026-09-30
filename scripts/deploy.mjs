@@ -123,7 +123,7 @@ if (config.envFile) {
     "WEB_DIST_PATH=/app/apps/web/dist",
     `CORS_ORIGINS=https://${config.domain}`,
     "LOG_LEVEL=info",
-    "WORKER_RUN_TIMES=09:00,15:00",
+    "WORKER_RUN_TIMES=05:00,15:00",
     "WORKER_TIME_ZONE=Asia/Shanghai",
   ].join("\\n");
   ssh(`test -f '${config.path}/shared/.env' || { umask 077; printf '%b\\n' '${defaultEnv}' > '${config.path}/shared/.env'; }`, "ssh <tencent-cloud> 初始化生产环境变量");

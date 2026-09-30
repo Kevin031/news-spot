@@ -1,5 +1,6 @@
 import { fetchBbc } from "./bbc.js";
 import { fetchBilibili } from "./bilibili.js";
+import { fetchDoubanMovies, fetchDoubanTv } from "./douban.js";
 import { fetchGithub } from "./github.js";
 import { fetchHackerNews } from "./hackernews.js";
 import { fetchIthome } from "./ithome.js";
@@ -8,9 +9,10 @@ import { fetchDevto } from "./devto.js";
 import { fetchStackOverflow } from "./stackoverflow.js";
 import { fetchRssSource } from "./rss-source.js";
 import { fetchAihotSelected, fetchAihotTopics } from "./aihot.js";
+import { fetchWikipediaZh } from "./wikipedia-zh.js";
 
 const rss = (feedUrl) => (context) => fetchRssSource({ ...context, feedUrl });
-const apiAdapters = { hackernews: fetchHackerNews, v2ex: fetchV2ex, github: fetchGithub, bilibili: fetchBilibili, devto: fetchDevto, stackoverflow: fetchStackOverflow, "aihot-selected": fetchAihotSelected, "aihot-topics": fetchAihotTopics };
+const apiAdapters = { hackernews: fetchHackerNews, v2ex: fetchV2ex, github: fetchGithub, bilibili: fetchBilibili, "douban-movies": fetchDoubanMovies, "douban-tv": fetchDoubanTv, devto: fetchDevto, stackoverflow: fetchStackOverflow, "wikipedia-zh": fetchWikipediaZh, "aihot-selected": fetchAihotSelected, "aihot-topics": fetchAihotTopics };
 const rssAdapters = {
   bbc: fetchBbc,
   ithome: fetchIthome,

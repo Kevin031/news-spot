@@ -25,7 +25,7 @@ export function createSteamPriceService({ fetchImpl = fetch, now = Date.now } = 
     url.searchParams.set("appids", ids.join(","));
     url.searchParams.set("cc", "cn");
     url.searchParams.set("filters", "price_overview");
-    const response = await http(url.href, { timeoutMs: 8_000 });
+    const response = await http(url.href, { timeoutMs: 15_000, retryCount: 2 });
     const data = await response.json();
     if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Steam 返回了无效价格数据");
     return Object.fromEntries(ids.map((id) => [id, normalizePrice(data[id])]));

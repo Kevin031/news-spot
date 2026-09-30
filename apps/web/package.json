@@ -12,7 +12,9 @@
     "typecheck": "vue-tsc --noEmit -p jsconfig.json"
   },
   "dependencies": {
-    "vue": "^3.5.25"
+    "reka-ui": "^2.10.5",
+    "vue": "^3.5.25",
+    "vue-draggable-plus": "^0.6.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",

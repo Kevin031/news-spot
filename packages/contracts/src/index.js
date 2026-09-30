@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const httpUrl = z.string().url().refine((value) => /^https?:\/\//.test(value), "仅支持 HTTP/HTTPS URL");
 
-export const categorySchema = z.enum(["china", "tech", "world", "finance", "ai"]);
+export const categorySchema = z.enum(["china", "tech", "world", "finance", "ai", "entertainment"]);
 export const sourceStatusSchema = z.enum(["unknown", "fresh", "stale", "error"]);
 
 export const hotItemSchema = z.object({
@@ -12,6 +12,8 @@ export const hotItemSchema = z.object({
   url: httpUrl,
   rank: z.number().int().positive(),
   score: z.number().finite().nullable().default(null),
+  posterUrl: httpUrl.nullable().optional(),
+  rating: z.number().finite().min(0).max(10).nullable().optional(),
   summary: z.string().trim().max(500).nullable().default(null),
   publishedAt: z.string().datetime().nullable().default(null),
   fetchedAt: z.string().datetime(),

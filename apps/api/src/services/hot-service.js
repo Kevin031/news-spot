@@ -13,7 +13,7 @@ function errorCode(error) {
   return typeof error?.code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(error.code) ? error.code : "SOURCE_UNAVAILABLE";
 }
 
-export function createHotService({ registry, http, env, cache, metrics, circuit, coordination, fetchLogs, logger, now = () => Date.now(), scheduleTimes = ["09:00", "15:00"], timeZone = "Asia/Shanghai" }) {
+export function createHotService({ registry, http, env, cache, metrics, circuit, coordination, fetchLogs, logger, now = () => Date.now(), scheduleTimes = ["05:00", "15:00"], timeZone = "Asia/Shanghai" }) {
   const inFlight = new Map();
 
   function fromSnapshot(source, snapshot, limit = 20, failedReason = null) {

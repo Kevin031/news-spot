@@ -14,10 +14,10 @@ import { hotRoutes } from "./routes/hot.js";
 import { metricsRoutes } from "./routes/metrics.js";
 import { sourcesRoutes } from "./routes/sources.js";
 import { steamPriceRoutes } from "./routes/steam-prices.js";
+import { steamDealsRoutes } from "./routes/steam-deals.js";
 import { loadEnv } from "./config/env.js";
 import { createRuntime } from "./runtime.js";
 import { sharedSchemas } from "./route-schemas.js";
-import { createSteamPriceService } from "./services/steam-price-service.js";
 
 export async function buildApp(options = {}) {
   const env = options.env ?? loadEnv();
@@ -44,10 +44,10 @@ export async function buildApp(options = {}) {
   for (const [name, schema] of Object.entries(sharedSchemas)) app.addSchema({ $id: name, ...schema });
 
   const runtime = createRuntime({ ...options, env, logger: app.log });
-  const { db, cache, metrics, registry, hotService, fetchLogs } = runtime;
+  const { db, cache, metrics, registry, hotService, fetchLogs, steamPrices, steamDeals } = runtime;
   const context = {
     env, db, cache, metrics, registry, hotService, fetchLogs,
-    steamPrices: createSteamPriceService({ fetchImpl: options.fetchImpl, now: options.now }),
+    steamPrices, steamDeals,
     apiError: (request, code, message, sourceId = null, retryable = false) => ({ code, message, sourceId, retryable, requestId: request.id }),
   };
 
@@ -64,6 +64,7 @@ export async function buildApp(options = {}) {
   await app.register(metricsRoutes, context);
   await app.register(fetchLogsRoutes, context);
   await app.register(steamPriceRoutes, context);
+  await app.register(steamDealsRoutes, context);
   await app.register(apiDocsRoutes);
 
   const webRoot = env.WEB_DIST_PATH ? resolve(env.WEB_DIST_PATH) : resolve(process.cwd(), "apps/web/dist");

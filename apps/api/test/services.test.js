@@ -136,7 +136,7 @@ describe("缓存与可靠性服务", () => {
 
   it("北京时间上午下午计算时段，启动补跑且单次最多并发三个", async () => {
     const nowRef = { value: Date.parse("2026-09-23T01:01:00Z") };
-    expect(schedulePosition(nowRef.value, ["09:00", "15:00"], "Asia/Shanghai")).toEqual({ latest: "2026-09-23T09:00", next: "2026-09-23T15:00" });
+    expect(schedulePosition(nowRef.value, ["05:00", "15:00"], "Asia/Shanghai")).toEqual({ latest: "2026-09-23T05:00", next: "2026-09-23T15:00" });
     const db = createDatabase(":memory:");
     const definitions = Array.from({ length: 5 }, (_, index) => ({ id: `source-${index}` }));
     let active = 0;
@@ -151,12 +151,48 @@ describe("缓存与可靠性服务", () => {
       }),
     };
     const schedule = createWorkerSchedule({ db, registry: { list: () => definitions }, hotService, fetchLogs: createFetchLogService(db, () => nowRef.value), now: () => nowRef.value });
-    expect(await schedule.tick()).toMatchObject({ slotKey: "2026-09-23T09:00", total: 5, success: 5, failed: 0 });
+    expect(await schedule.tick()).toMatchObject({ slotKey: "2026-09-23T05:00", total: 5, success: 5, failed: 0 });
     expect(db.prepare("SELECT next_slot_key FROM worker_state WHERE id=1").get().next_slot_key).toBe("2026-09-23T15:00");
     expect(maxActive).toBe(3);
     expect(await schedule.tick()).toBeNull();
     nowRef.value = Date.parse("2026-09-23T07:01:00Z");
     expect(await schedule.tick()).toMatchObject({ slotKey: "2026-09-23T15:00", success: 5 });
+    db.close();
+  });
+
+  it("计划时段已完成时，启动只补抓没有快照的来源", async () => {
+    const current = Date.parse("2026-09-23T01:01:00Z");
+    const db = createDatabase(":memory:");
+    db.prepare("INSERT INTO worker_slots (slot_key, status, started_at) VALUES (?, 'completed', ?)").run("2026-09-23T05:00", current);
+    const cache = createCacheService(db);
+    cache.set("a", [item(new Date(current).toISOString())], 1000, current);
+    const refreshSource = vi.fn(async () => ({ success: true, stale: false }));
+    const schedule = createWorkerSchedule({
+      db,
+      registry: { list: () => [{ id: "a" }, { id: "b" }] },
+      hotService: { refreshSource },
+      fetchLogs: createFetchLogService(db, () => current),
+      now: () => current,
+    });
+    expect(await schedule.tick()).toBeNull();
+    expect(await schedule.runMissingSnapshots(cache)).toEqual({ total: 1, success: 1, failed: 0 });
+    expect(refreshSource).toHaveBeenCalledExactlyOnceWith("b", { trigger: "cold", slotKey: null });
+    db.close();
+  });
+
+  it("启动时补抓缺少海报和评分字段的旧豆瓣快照", async () => {
+    const current = Date.parse("2026-09-23T01:01:00Z");
+    const db = createDatabase(":memory:");
+    const cache = createCacheService(db);
+    cache.set("douban-movies", [item(new Date(current).toISOString())], 1000, current);
+    cache.set("douban-tv", [{ ...item(new Date(current).toISOString()), posterUrl: null, rating: null }], 1000, current);
+    const refreshSource = vi.fn(async () => ({ success: true, stale: false }));
+    const schedule = createWorkerSchedule({
+      db, registry: { list: () => [{ id: "douban-movies" }, { id: "douban-tv" }] },
+      hotService: { refreshSource }, fetchLogs: createFetchLogService(db, () => current), now: () => current,
+    });
+    expect(await schedule.runMissingSnapshots(cache)).toEqual({ total: 1, success: 1, failed: 0 });
+    expect(refreshSource).toHaveBeenCalledExactlyOnceWith("douban-movies", { trigger: "cold", slotKey: null });
     db.close();
   });
 

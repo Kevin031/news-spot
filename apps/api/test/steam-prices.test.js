@@ -32,11 +32,25 @@ describe("Steam 国区价格", () => {
     expect(Object.fromEntries(nameUrl.searchParams)).toEqual({ appids: "620", cc: "cn", l: "schinese", filters: "basic" });
   });
 
-  it("上游失败时不缓存错误", async () => {
-    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response(null, { status: 503 })).mockResolvedValueOnce(new Response(JSON.stringify(steamResponse), { status: 200 })).mockResolvedValueOnce(new Response(null, { status: 503 }));
+  it("上游临时失败时重试并缓存成功结果", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response(null, { status: 503 })).mockResolvedValueOnce(new Response(JSON.stringify(steamResponse), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ "620": { success: true, data: { name: "传送门 2" } } }), { status: 200 }));
+    const service = createSteamPriceService({ fetchImpl });
+    expect((await service.getPrices(["620"]))["620"].finalCents).toBe(2100);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    await service.getPrices(["620"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("重试仍失败时不缓存错误", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(steamResponse), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }));
     const service = createSteamPriceService({ fetchImpl });
     await expect(service.getPrices(["620"])).rejects.toThrow();
     expect((await service.getPrices(["620"]))["620"].finalCents).toBe(2100);
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(5);
   });
 });

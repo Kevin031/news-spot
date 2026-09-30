@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch } from "vue";
 import { newsApi } from "../services/api.js";
+import AppIcon from "./AppIcon.vue";
 
 const props = defineProps({ open: Boolean, sources: { type: Array, default: () => [] }, api: { type: Object, default: () => newsApi } });
 const emit = defineEmits(["update:open"]);
@@ -48,7 +49,7 @@ watch([sourceId, status], () => { if (props.open) fetchPage(); });
 <template>
   <div v-if="open" class="dialog-backdrop" role="presentation" @click.self="close" @keydown="onKeydown">
     <section class="fetch-dialog" role="dialog" aria-modal="true" aria-labelledby="fetch-logs-title">
-      <header class="fetch-dialog-header"><div><h2 id="fetch-logs-title">抓取日志</h2><p>仅记录实际抓取；页面重新加载只读取已保存数据。</p></div><button type="button" aria-label="关闭抓取日志" @click="close">关闭</button></header>
+      <header class="fetch-dialog-header"><div><h2 id="fetch-logs-title">抓取日志</h2><p>仅记录实际抓取；页面重新加载只读取已保存数据。</p></div><button class="dialog-close" type="button" aria-label="关闭抓取日志" @click="close"><AppIcon name="close" /></button></header>
       <div class="fetch-dialog-body">
         <div v-if="latestSlot" class="fetch-slot">最近时段 {{ latestSlot.key }} · {{ latestSlot.status === "completed" ? "已完成" : "进行中" }} · 成功 {{ latestSlot.success }} / {{ latestSlot.total }} · 失败 {{ latestSlot.failed }}</div>
         <div v-else class="fetch-slot">尚无定时抓取记录</div>

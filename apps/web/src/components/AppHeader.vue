@@ -10,7 +10,7 @@ const shortcut = /Mac|iPhone|iPad/.test(window.navigator.platform) ? "⌘ K" : "
   <header class="app-header">
     <div class="header-inner">
       <a class="brand" href="/" aria-label="News Spot 首页">
-        <span class="brand-mark">N</span>
+        <img class="brand-mark" src="/favicon.svg?v=2" alt="" width="34" height="34">
         <span><strong>News Spot</strong></span>
       </a>
       <div class="desktop-search">

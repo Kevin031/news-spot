@@ -36,7 +36,7 @@ export function isSnapshotCurrent(fetchedAt, now, times, timeZone) {
   return snapshotSlot >= schedulePosition(now, times, timeZone).latest;
 }
 
-export function createWorkerSchedule({ db, registry, hotService, fetchLogs, now = () => Date.now(), times = ["09:00", "15:00"], timeZone = "Asia/Shanghai", logger = { warn() {} }, maxConcurrency = 3 }) {
+export function createWorkerSchedule({ db, registry, hotService, fetchLogs, now = () => Date.now(), times = ["05:00", "15:00"], timeZone = "Asia/Shanghai", logger = { warn() {} }, maxConcurrency = 3 }) {
   const owner = randomUUID();
   const heartbeat = db.prepare("INSERT INTO worker_state (id, heartbeat_at, next_slot_key) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET heartbeat_at=excluded.heartbeat_at, next_slot_key=excluded.next_slot_key");
   const createSlot = db.prepare("INSERT OR IGNORE INTO worker_slots (slot_key, status, started_at) VALUES (?, 'pending', ?)");
@@ -47,8 +47,7 @@ export function createWorkerSchedule({ db, registry, hotService, fetchLogs, now 
   const finishSlot = db.prepare("UPDATE worker_slots SET status='completed', owner=NULL, lease_until=NULL, finished_at=?, total_count=?, success_count=?, failure_count=? WHERE slot_key=? AND owner=?");
   let running = false;
 
-  async function runSources(slotKey, trigger) {
-    const sources = registry.list();
+  async function runSources(slotKey, trigger, sources = registry.list()) {
     let index = 0;
     let success = 0;
     let failed = 0;
@@ -101,5 +100,13 @@ export function createWorkerSchedule({ db, registry, hotService, fetchLogs, now 
       }
     },
     async runOnce() { return runSources(null, "manual"); },
+    async runMissingSnapshots(cache) {
+      return runSources(null, "cold", registry.list().filter((source) => {
+        const snapshot = cache.get(source.id);
+        if (!snapshot) return true;
+        return ["douban-movies", "douban-tv"].includes(source.id)
+          && snapshot.items.some((item) => !Object.hasOwn(item, "posterUrl") || !Object.hasOwn(item, "rating"));
+      }));
+    },
   };
 }

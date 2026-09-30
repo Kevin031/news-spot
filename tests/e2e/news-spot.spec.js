@@ -23,7 +23,10 @@ function result(source, status = "fresh") {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.route("https://www.cheapshark.com/api/1.0/deals?**", (route) => route.fulfill({ contentType: "application/json", body: "[]" }));
+  await page.route("**/api/v1/steam-deals?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
+    items: [{ id: "default", title: "快照游戏", url: "https://www.cheapshark.com/redirect?dealID=default", thumbnail: null, salePrice: 21, normalPrice: 42, discount: 50 }],
+    hasMore: false, fetchedAt: "2026-08-21T09:00:00.000Z", stale: true,
+  }) }));
   await page.route("**/api/v1/sources", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ timestamp: new Date().toISOString(), sources }) }));
   await page.route("**/api/v1/batch?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
     timestamp: new Date().toISOString(),
@@ -41,7 +44,7 @@ test.beforeEach(async ({ page }) => {
 test("响应式首页展示真实来源状态且无横向溢出", async ({ page }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Hacker News" })).toBeVisible();
-  await expect(page.getByText("最近成功快照")).toBeVisible();
+  await expect(page.getByLabel("Steam 游戏优惠").getByText("最近成功快照")).toBeVisible();
   await expect(page.getByText("暂时无法获取数据")).toBeVisible();
   await expect(page.locator(".source-card")).toHaveCount(8);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -123,27 +126,25 @@ test("分类、搜索、布局和主题可操作并持久化", async ({ page }, 
 
 test("首页 Steam 优惠卡片展示缩略图、价格和 CheapShark 链接", async ({ page }, testInfo) => {
   const requests = [];
-  await page.route("https://www.cheapshark.com/api/1.0/deals?**", (route) => {
+  await page.route("**/api/v1/steam-deals?**", (route) => {
     const url = new URL(route.request().url());
     requests.push(Object.fromEntries(url.searchParams));
     const pageNumber = Number(url.searchParams.get("pageNumber"));
     const count = pageNumber === 0 ? 8 : 1;
-    route.fulfill({ contentType: "application/json", body: JSON.stringify(Array.from({ length: count }, (_, index) => ({
-      dealID: `test%2B${pageNumber}-${index}%3D`, storeID: "1", isOnSale: "1", title: `游戏 ${pageNumber}-${index}`,
-      salePrice: "4.99", normalPrice: "19.99", savings: "75.0375",
-      steamAppID: String(1000 + pageNumber * 8 + index),
-      thumb: index === 0 ? "https://images.example.com/game.jpg" : null,
-    }))) });
-  });
-  await page.route("**/api/v1/steam-prices?**", (route) => {
-    const ids = new URL(route.request().url()).searchParams.get("appids").split(",");
-    route.fulfill({ contentType: "application/json", body: JSON.stringify({ prices: Object.fromEntries(ids.map((id) => [id, { currency: "CNY", originalCents: 4900, finalCents: 990, discountPercent: 80, localizedName: id === "1000" ? "中文游戏 0-0" : null }])) }) });
+    route.fulfill({ contentType: "application/json", body: JSON.stringify({
+      items: Array.from({ length: count }, (_, index) => ({
+        id: `test%2B${pageNumber}-${index}%3D`, title: pageNumber === 0 && index === 0 ? "中文游戏 0-0" : `游戏 ${pageNumber}-${index}`,
+        url: `https://www.cheapshark.com/redirect?dealID=test%2B${pageNumber}-${index}%3D`,
+        salePrice: 9.9, normalPrice: 49, discount: 80,
+        thumbnail: index === 0 ? "https://images.example.com/game.jpg" : null,
+      })), hasMore: pageNumber === 0, fetchedAt: new Date().toISOString(), stale: false,
+    }) });
   });
   await page.route("https://images.example.com/game.jpg", (route) => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+iYxkAAAAASUVORK5CYII=", "base64") }));
   await page.goto("/");
   await expect.poll(() => page.locator(".steam-deal-row").count()).toBeGreaterThanOrEqual(8);
   await page.getByRole("tab", { name: /游戏优惠/ }).click();
-  expect(requests[0]).toMatchObject({ storeID: "1", onSale: "1", pageNumber: "0", pageSize: "8" });
+  expect(requests[0]).toMatchObject({ pageNumber: "0" });
   await expect(page.getByRole("img", { name: "中文游戏 0-0 缩略图" })).toBeVisible();
   await expect(page.getByRole("img", { name: "游戏 0-1 暂无缩略图" })).toBeVisible();
   await expect(page.locator(".steam-deal-row").first().getByText("¥9.90")).toBeVisible();
@@ -183,48 +184,17 @@ test("桌面热点卡片在 80vh 内独立滚动", async ({ page }, testInfo) =>
   await expect(page.locator(".source-card").first().getByText("Hacker News 热点 29")).toBeVisible();
 });
 
-test("美元优惠未在国区生效时可继续查找下一批", async ({ page }) => {
-  await page.route("https://www.cheapshark.com/api/1.0/deals?**", (route) => {
-    const pageNumber = Number(new URL(route.request().url()).searchParams.get("pageNumber"));
-    const count = pageNumber === 0 ? 8 : 1;
-    route.fulfill({ contentType: "application/json", body: JSON.stringify(Array.from({ length: count }, (_, index) => ({
-      dealID: `deal-${pageNumber}-${index}`, storeID: "1", isOnSale: "1", steamAppID: String(2000 + pageNumber * 8 + index),
-      title: `国区游戏 ${pageNumber}-${index}`, salePrice: "1.99", normalPrice: "9.99", thumb: null,
-    }))) });
+test("游戏优惠只读取本站快照接口", async ({ page }) => {
+  const requests = [];
+  page.on("request", (request) => {
+    if (request.url().includes("cheapshark.com/api/") || request.url().includes("/steam-prices")) requests.push(request.url());
   });
-  await page.route("**/api/v1/steam-prices?**", (route) => {
-    const ids = new URL(route.request().url()).searchParams.get("appids").split(",");
-    const onSale = ids.length === 1;
-    route.fulfill({ contentType: "application/json", body: JSON.stringify({ prices: Object.fromEntries(ids.map((id) => [id, {
-      currency: "CNY", originalCents: 4200, finalCents: onSale ? 2100 : 4200, discountPercent: onSale ? 50 : 0,
-    }])) }) });
-  });
+  await page.route("**/api/v1/steam-deals?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
+    items: [{ id: "deal", title: "快照游戏", url: "https://www.cheapshark.com/redirect?dealID=deal", thumbnail: null, salePrice: 21, normalPrice: 42, discount: 50 }],
+    hasMore: false, fetchedAt: new Date().toISOString(), stale: true,
+  }) }));
   await page.goto("/");
-  await expect(page.locator(".steam-deal-row")).toHaveCount(1);
-  await expect(page.getByText("国区游戏 1-0")).toBeVisible();
-});
-
-test("已有优惠后遇到整页非国区折扣仍自动续页", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop");
-  const requestedPages = [];
-  await page.route("https://www.cheapshark.com/api/1.0/deals?**", (route) => {
-    const pageNumber = Number(new URL(route.request().url()).searchParams.get("pageNumber"));
-    requestedPages.push(pageNumber);
-    route.fulfill({ contentType: "application/json", body: JSON.stringify(Array.from({ length: pageNumber === 2 ? 1 : 8 }, (_, index) => ({
-      dealID: `skip-${pageNumber}-${index}`, storeID: "1", isOnSale: "1", steamAppID: String(3000 + pageNumber * 8 + index),
-      title: `续页游戏 ${pageNumber}-${index}`, salePrice: "1.99", normalPrice: "9.99", thumb: null,
-    }))) });
-  });
-  await page.route("**/api/v1/steam-prices?**", (route) => {
-    const ids = new URL(route.request().url()).searchParams.get("appids").split(",");
-    route.fulfill({ contentType: "application/json", body: JSON.stringify({ prices: Object.fromEntries(ids.map((id) => [id, {
-      currency: "CNY", originalCents: 4200, finalCents: Number(id) < 3008 || Number(id) >= 3016 ? 2100 : 4200,
-      discountPercent: Number(id) < 3008 || Number(id) >= 3016 ? 50 : 0, localizedName: null,
-    }])) }) });
-  });
-  await page.goto("/");
-  await expect.poll(() => page.locator(".steam-deal-row").count()).toBeGreaterThanOrEqual(8);
-  if (await page.locator(".steam-deal-row").count() === 8) await page.evaluate(() => document.querySelector(".steam-list-end")?.scrollIntoView());
-  await expect(page.locator(".steam-deal-row")).toHaveCount(9);
-  expect(requestedPages).toEqual([0, 1, 2]);
+  await expect(page.getByText("快照游戏")).toBeVisible();
+  await expect(page.getByLabel("Steam 游戏优惠").getByText("最近成功快照")).toBeVisible();
+  expect(requests).toEqual([]);
 });

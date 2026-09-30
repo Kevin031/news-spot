@@ -38,6 +38,7 @@ function stop(code) {
 
 console.log(`开发 API：http://127.0.0.1:${apiPort}`);
 children.push(start("API", ["--watch", "scripts/dev.js"], apiDir, "ignore"));
+children.push(start("Worker", ["scripts/dev-worker.js"], apiDir, "ignore"));
 children.push(start("Web", ["node_modules/vite/bin/vite.js", "--port", webPort], webDir, "inherit"));
 
 process.on("SIGINT", () => stop(130));

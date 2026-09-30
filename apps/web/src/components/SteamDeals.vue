@@ -1,6 +1,7 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { fetchSteamDeals } from "../services/cheapshark.js";
+import SourceMark from "./SourceMark.vue";
 
 const props = defineProps({ active: { type: Boolean, required: true } });
 const items = ref([]);
@@ -8,6 +9,8 @@ const loading = ref(false);
 const error = ref("");
 const hasMore = ref(true);
 const loaded = ref(false);
+const stale = ref(false);
+const fetchedAt = ref("");
 const brokenImages = ref(new Set());
 const listElement = ref(null);
 const endElement = ref(null);
@@ -15,6 +18,7 @@ let pageNumber = 0;
 let controller = null;
 let observer = null;
 let observerRevision = 0;
+let retryTimer = null;
 
 async function observeEnd() {
   const revision = ++observerRevision;
@@ -31,17 +35,28 @@ async function observeEnd() {
 
 async function loadMore() {
   if (loading.value || !hasMore.value) return;
+  window.clearTimeout(retryTimer);
+  retryTimer = null;
   loading.value = true;
   error.value = "";
   controller = new AbortController();
   try {
     const result = await fetchSteamDeals(pageNumber, { signal: controller.signal });
+    window.clearTimeout(retryTimer);
+    retryTimer = null;
     items.value = [...items.value, ...result.items];
     hasMore.value = result.hasMore;
+    stale.value = Boolean(result.stale);
+    fetchedAt.value = result.fetchedAt || "";
     pageNumber += 1;
     loaded.value = true;
   } catch (cause) {
-    if (cause.name !== "AbortError") error.value = cause.message || "暂时无法获取优惠";
+    if (cause.name !== "AbortError") {
+      error.value = cause.message || "暂时无法获取优惠";
+      if (cause.code === "DEALS_INITIALIZING" && props.active) {
+        retryTimer = window.setTimeout(() => { retryTimer = null; if (props.active) void loadMore(); }, 5_000);
+      }
+    }
   } finally {
     loading.value = false;
     if (!items.value.length && hasMore.value && !error.value && props.active) void loadMore();
@@ -64,6 +79,7 @@ watch([() => items.value.length, hasMore, error, () => props.active], observeEnd
 onMounted(() => window.addEventListener("resize", observeEnd));
 onBeforeUnmount(() => {
   observerRevision += 1;
+  window.clearTimeout(retryTimer);
   controller?.abort();
   observer?.disconnect();
   window.removeEventListener("resize", observeEnd);
@@ -73,7 +89,7 @@ onBeforeUnmount(() => {
 <template>
   <section :class="['steam-deals', { 'steam-deals--short': (error && !items.length) || (loaded && !items.length) }]" aria-label="Steam 游戏优惠">
     <header class="card-header">
-      <div class="source-identity"><span class="source-mark" aria-hidden="true">ST</span><span class="source-label"><h2>Steam 游戏优惠</h2><small><span class="status-dot" />{{ loading && !items.length ? "正在加载" : error && !items.length ? "暂时不可用" : "当前折扣" }}</small></span></div>
+      <div class="source-identity"><SourceMark id="steam-deals" name="Steam 游戏优惠" /><span class="source-label"><h2>Steam 游戏优惠</h2><small><span class="status-dot" />{{ loading && !items.length ? "正在加载" : error && !items.length ? "暂时不可用" : stale ? "最近成功快照" : "当前折扣" }}</small></span></div>
     </header>
 
     <div v-if="loading && !items.length" class="card-state skeleton-state" role="status"><span v-for="index in 6" :key="index" class="skeleton-line" /></div>
@@ -94,6 +110,6 @@ onBeforeUnmount(() => {
       <div v-if="hasMore && !error" ref="endElement" class="steam-list-end" role="status">{{ loading ? "正在加载更多优惠…" : "向下滚动查看更多优惠" }}</div>
       <div v-if="error" class="steam-list-end" role="alert">{{ error }} <button type="button" @click="loadMore">重试</button></div>
     </div>
-    <footer class="card-footer"><span>Steam 国区人民币价格 · 实际售价以商店为准</span><a href="https://www.cheapshark.com" target="_blank" rel="noopener noreferrer">优惠数据来自 CheapShark</a></footer>
+    <footer class="card-footer"><span>Steam 国区人民币价格 · {{ fetchedAt ? `更新于 ${new Date(fetchedAt).toLocaleString('zh-CN')}` : '实际售价以商店为准' }}</span><a href="https://www.cheapshark.com" target="_blank" rel="noopener noreferrer">优惠数据来自 CheapShark</a></footer>
   </section>
 </template>

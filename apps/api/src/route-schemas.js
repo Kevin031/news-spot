@@ -14,11 +14,12 @@ export const sharedSchemas = {
     HotItem: { type: "object", required: ["id", "sourceId", "title", "url", "rank", "score", "summary", "publishedAt", "fetchedAt"], properties: {
       id: string, sourceId: string, title: string, url: { ...string, format: "uri" }, rank: integer,
       score: { type: "number", nullable: true }, summary: nullableString, publishedAt: nullableDateTime, fetchedAt: dateTime,
+      posterUrl: { ...string, format: "uri", nullable: true }, rating: { type: "number", nullable: true },
       originalSourceName: string, attribution: { type: "object", required: ["name", "url"], properties: { name: string, url: { ...string, format: "uri" } } },
       sourceCount: integer,
     } },
     Source: { type: "object", required: ["id", "name", "category", "homeUrl", "refreshIntervalMs", "timeoutMs", "enabled", "riskLevel", "dataMethod", "status", "stale", "lastSuccessAt", "lastError"], properties: {
-      id: string, name: string, category: { ...string, enum: ["china", "tech", "world", "finance", "ai"] }, homeUrl: { ...string, format: "uri" },
+      id: string, name: string, category: { ...string, enum: ["china", "tech", "world", "finance", "ai", "entertainment"] }, homeUrl: { ...string, format: "uri" },
       refreshIntervalMs: integer, timeoutMs: integer, enabled: { type: "boolean" }, riskLevel: { ...string, enum: ["low", "medium", "high"] },
       dataMethod: { ...string, enum: ["official-api", "public-api", "rss", "public-web-api", "html"] },
       status: { ...string, enum: ["unknown", "fresh", "stale", "error"] }, stale: { type: "boolean" }, lastSuccessAt: nullableDateTime, lastError: nullableString,
@@ -39,6 +40,10 @@ export const sharedSchemas = {
     } },
     SteamPricesResponse: { type: "object", required: ["prices"], properties: {
       prices: { type: "object", additionalProperties: ref("SteamPrice") },
+    } },
+    SteamDealsResponse: { type: "object", required: ["items", "hasMore", "fetchedAt", "stale"], properties: {
+      items: { type: "array", items: { type: "object", additionalProperties: true } },
+      hasMore: { type: "boolean" }, fetchedAt: dateTime, stale: { type: "boolean" },
     } },
     WorkerSlot: { type: "object", nullable: true, required: ["key", "status", "startedAt", "finishedAt", "total", "success", "failed"], properties: {
       key: string, status: string, startedAt: dateTime, finishedAt: nullableDateTime, total: integer, success: integer, failed: integer,

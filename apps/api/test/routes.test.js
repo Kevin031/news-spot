@@ -45,7 +45,7 @@ describe("API 路由", () => {
     expect(spec.paths["/api/openapi.json"]).toBeUndefined();
     expect(Object.keys(spec.paths).sort()).toEqual([
       "/api/v1/batch", "/api/v1/fetch-logs", "/api/v1/health", "/api/v1/health/live",
-      "/api/v1/hot/{sourceId}", "/api/v1/metrics", "/api/v1/sources", "/api/v1/steam-prices",
+      "/api/v1/hot/{sourceId}", "/api/v1/metrics", "/api/v1/sources", "/api/v1/steam-prices", "/api/v1/steam-deals",
     ].sort());
     for (const path of Object.keys(spec.paths)) {
       expect(app.hasRoute({ method: "GET", url: path.replace("{sourceId}", ":sourceId") })).toBe(true);
@@ -83,6 +83,7 @@ describe("API 路由", () => {
     expect((await app.inject("/api/v1/fetch-logs?limit=101")).statusCode).toBe(400);
     expect((await app.inject("/api/v1/fetch-logs?cursor=invalid")).statusCode).toBe(400);
     expect((await app.inject("/api/v1/steam-prices?appids=bad")).statusCode).toBe(400);
+    expect((await app.inject("/api/v1/steam-deals?pageNumber=-1")).statusCode).toBe(400);
     expect((await app.inject(`/api/v1/steam-prices?appids=${Array.from({ length: 9 }, (_, index) => index + 1).join(",")}`)).statusCode).toBe(400);
   });
 
@@ -97,6 +98,28 @@ describe("API 路由", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().prices["620"]).toMatchObject({ currency: "CNY", originalCents: 4200, finalCents: 2100, discountPercent: 50, localizedName: "传送门 2" });
     expect(response.json().prices["999"]).toBeNull();
+  });
+
+  it("Worker 写入 Steam 游戏与价格后，接口只读取数据库快照", async () => {
+    const env = loadEnv({ NODE_ENV: "test", DATABASE_PATH: ":memory:", LOG_LEVEL: "silent" });
+    let requests = 0;
+    const fetchImpl = async (url) => {
+      requests += 1;
+      const query = new URL(url).searchParams;
+      if (String(url).includes("cheapshark")) return new Response(JSON.stringify([{ storeID: "1", isOnSale: "1", title: "测试游戏", steamAppID: "620", salePrice: "2.99", normalPrice: "19.99", dealID: "deal", thumb: null }]), { status: 200 });
+      if (query.get("filters") === "basic") return new Response(JSON.stringify({ "620": { success: true, data: { name: "中文游戏" } } }), { status: 200 });
+      return new Response(JSON.stringify({ "620": { success: true, data: { price_overview: { currency: "CNY", initial: 4200, final: 2100, discount_percent: 50 } } } }), { status: 200 });
+    };
+    const app = await buildApp({ env, databasePath: ":memory:", fetchImpl, sources: [], logger: false });
+    apps.push(app);
+    expect((await app.inject("/api/v1/steam-deals?pageNumber=0")).statusCode).toBe(503);
+    await app.newsSpot.steamDeals.refresh();
+    const requestCount = requests;
+    const response = await app.inject("/api/v1/steam-deals?pageNumber=0");
+    expect(response.statusCode).toBe(200);
+    expect(response.json().items[0]).toMatchObject({ title: "中文游戏", steamAppID: "620", salePrice: 21, normalPrice: 42, discount: 50 });
+    expect(response.json()).toMatchObject({ hasMore: false, stale: false });
+    expect(requests).toBe(requestCount);
   });
 
   it("限制 CORS 并拒绝已停用的强制抓取参数", async () => {

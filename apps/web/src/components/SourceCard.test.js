@@ -30,11 +30,20 @@ describe("SourceCard", () => {
     expect(wrapper.text()).toContain("更新于 2026/09/22");
   });
 
-  it("中文来源使用稳定的缩写标识，错误状态只显示一个重试按钮", () => {
+  it("中文来源显示公开图标，错误状态只显示一个重试按钮", () => {
     const wrapper = mount(SourceCard, { props: { source: { ...source, id: "ithome", name: "IT之家" }, result: { status: "error", items: [], error: { message: "上游失败" } } } });
-    expect(wrapper.get(".source-mark").text()).toBe("IT");
+    expect(wrapper.get(".source-mark img").attributes("src")).toBe("/source-icons/ithome.png");
     expect(wrapper.findAll("button")).toHaveLength(1);
     expect(wrapper.get("button").text()).toBe("重新连接");
+  });
+
+  it("未收录来源及图标加载失败时显示原有缩写", async () => {
+    const result = { status: "fresh", items: [] };
+    const unknown = mount(SourceCard, { props: { source: { ...source, id: "other", name: "其他来源" }, result } });
+    expect(unknown.get(".source-mark").text()).toBe("其他");
+    const known = mount(SourceCard, { props: { source: { ...source, id: "ithome", name: "IT之家" }, result } });
+    await known.get(".source-mark img").trigger("error");
+    expect(known.get(".source-mark").text()).toBe("IT");
   });
 
   it("真实条目链接安全打开原始来源", () => {
@@ -50,5 +59,23 @@ describe("SourceCard", () => {
     expect(wrapper.text()).toContain("原始信源");
     expect(wrapper.get(".hot-provenance a").attributes("href")).toBe("https://aihot.news/items/1");
     expect(wrapper.get(".hot-main-link").attributes("href")).toBe(item.url);
+  });
+
+  it("豆瓣卡片展示海报和右侧评分，海报失败时显示占位", async () => {
+    const doubanItem = { ...item, sourceId: "douban-movies", posterUrl: "https://img9.doubanio.com/poster.jpg", rating: 8.7, score: null, summary: null };
+    const wrapper = mount(SourceCard, { props: { source: { ...source, id: "douban-movies", name: "豆瓣热门电影" }, result: { status: "fresh", items: [doubanItem] } } });
+    expect(wrapper.get(".douban-poster img").attributes("src")).toBe(doubanItem.posterUrl);
+    expect(wrapper.get(".douban-rating").text()).toBe("8.7");
+    expect(wrapper.get(".douban-rating").attributes("aria-label")).toBe("豆瓣评分 8.7");
+    expect(wrapper.get(".douban-title").attributes("href")).toBe(item.url);
+    await wrapper.get(".douban-poster img").trigger("error");
+    expect(wrapper.get(".douban-poster-placeholder").text()).toBe("暂无海报");
+  });
+
+  it("未评分电视剧保留右侧评分位置", () => {
+    const doubanItem = { ...item, sourceId: "douban-tv", posterUrl: null, rating: null, score: null, summary: "更新至14集" };
+    const wrapper = mount(SourceCard, { props: { source: { ...source, id: "douban-tv", name: "豆瓣热门电视剧" }, result: { status: "fresh", items: [doubanItem] } } });
+    expect(wrapper.get(".douban-rating").text()).toBe("暂无评分");
+    expect(wrapper.get(".douban-detail small").text()).toBe("更新至14集");
   });
 });

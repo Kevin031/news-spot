@@ -16,7 +16,7 @@ export const newsApi = {
   sources: (signal) => request("/api/v1/sources", { signal }),
   batch: (ids, limit = 12, signal) => request(`/api/v1/batch?sources=${encodeURIComponent(ids.join(","))}&limit=${limit}`, { signal }),
   hot: (id, { limit = 12, signal } = {}) => request(`/api/v1/hot/${encodeURIComponent(id)}?limit=${limit}`, { signal }),
-  steamPrices: (ids, signal) => request(`/api/v1/steam-prices?appids=${encodeURIComponent(ids.join(","))}`, { signal }),
+  steamDeals: (pageNumber, signal) => request(`/api/v1/steam-deals?pageNumber=${pageNumber}`, { signal }),
   fetchLogs: ({ limit = 20, cursor, sourceId, status, signal } = {}) => {
     const params = new window.URLSearchParams({ limit: String(limit) });
     if (cursor) params.set("cursor", cursor);

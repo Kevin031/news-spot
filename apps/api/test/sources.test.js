@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { fetchBbc } from "../src/sources/bbc.js";
 import { fetchBilibili } from "../src/sources/bilibili.js";
+import { fetchDoubanMovies, fetchDoubanTv } from "../src/sources/douban.js";
 import { fetchGithub } from "../src/sources/github.js";
 import { fetchHackerNews } from "../src/sources/hackernews.js";
 import { fetchIthome } from "../src/sources/ithome.js";
@@ -11,6 +12,7 @@ import { fetchDevto } from "../src/sources/devto.js";
 import { fetchStackOverflow } from "../src/sources/stackoverflow.js";
 import { fetchRssSource } from "../src/sources/rss-source.js";
 import { fetchAihotSelected, fetchAihotTopics } from "../src/sources/aihot.js";
+import { fetchWikipediaZh } from "../src/sources/wikipedia-zh.js";
 import { loadEnv } from "../src/config/env.js";
 import { createSourceDefinitions } from "../src/config/sources.js";
 import { createSourceRegistry } from "../src/sources/registry.js";
@@ -62,6 +64,25 @@ describe("真实数据适配器", () => {
     await expect(fetchBilibili({ http: async () => response('{"code":-1}'), source: source("bilibili") })).rejects.toThrow("异常状态");
   });
 
+  it("将豆瓣热门电影和电视剧分别映射成真实作品链接", async () => {
+    const urls = [];
+    const http = async (url, options) => {
+      urls.push(String(url));
+      expect(options).toMatchObject({ retryOn429: false, headers: { Referer: "https://movie.douban.com/" } });
+      return response(fixture("douban.json"));
+    };
+    const movies = await fetchDoubanMovies({ http, source: source("douban-movies"), limit: 1 });
+    const tv = await fetchDoubanTv({ http, source: source("douban-tv") });
+    expect(urls[0]).toContain("type=movie");
+    expect(urls[1]).toContain("type=tv");
+    expect(movies).toHaveLength(1);
+    expect(movies[0]).toMatchObject({ id: "36850814", rank: 1, score: null, rating: 6.4, posterUrl: "https://img9.doubanio.com/view/photo/s_ratio_poster/public/p2934583425.jpg", url: "https://movie.douban.com/subject/36850814/" });
+    expect(tv).toHaveLength(2);
+    expect(tv[1]).toMatchObject({ id: "37297001", rank: 2, score: null, rating: null, posterUrl: null, summary: "更新至14集" });
+    await expect(fetchDoubanMovies({ http: async () => response("{}"), source: source("douban-movies") })).rejects.toThrow("结构异常");
+    await expect(fetchDoubanTv({ http: async () => response('{"subjects":[]}'), source: source("douban-tv") })).rejects.toThrow("无有效条目");
+  });
+
   it("标准化 DEV Community 并限制高延迟请求重试", async () => {
     const http = async (_url, options) => {
       expect(options).toMatchObject({ retryCount: 1 });
@@ -84,6 +105,30 @@ describe("真实数据适配器", () => {
     await expect(fetchStackOverflow({ http, source: stackSource, now: () => now })).rejects.toMatchObject({ code: "UPSTREAM_BACKOFF" });
     now += 2001;
     await expect(fetchStackOverflow({ http, source: stackSource, now: () => now })).resolves.toHaveLength(3);
+  });
+
+  it("中文维基日榜过滤非词条，并保留浏览量和统计日期", async () => {
+    const http = async (url, options) => {
+      expect(String(url)).toBe("https://wikimedia.org/api/rest_v1/metrics/pageviews/top/zh.wikipedia.org/all-access/2026/09/28");
+      expect(options.headers["User-Agent"]).toContain("hot-spots.kevinlau.cn");
+      return response(JSON.stringify({ items: [{ articles: [
+        { article: "Wikipedia:首页", views: 1000, rank: 1 },
+        { article: "Special:Search", views: 900, rank: 2 },
+        { article: "2026年亞洲運動會", views: 800, rank: 3 },
+        { article: "颱風_樺加沙", views: 700, rank: 4 },
+      ] }] }));
+    };
+    const items = await fetchWikipediaZh({ http, source: source("wikipedia-zh"), limit: 2, now: () => Date.parse("2026-09-30T12:00:00Z") });
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ title: "2026年亞洲運動會", rank: 1, score: 800, summary: "2026-09-28 浏览量", publishedAt: null });
+    expect(items[1].url).toBe("https://zh.wikipedia.org/wiki/%E9%A2%B1%E9%A2%A8_%E6%A8%BA%E5%8A%A0%E6%B2%99");
+    expect(items[1].rank).toBe(2);
+  });
+
+  it("中文维基日榜异常时报告失败", async () => {
+    const context = { source: source("wikipedia-zh"), now: () => Date.parse("2026-09-30T12:00:00Z") };
+    await expect(fetchWikipediaZh({ ...context, http: async () => response("{}") })).rejects.toThrow("结构异常");
+    await expect(fetchWikipediaZh({ ...context, http: async () => response('{"items":[{"articles":[{"article":"Special:Search","views":1}]}]}') })).rejects.toThrow("无有效词条");
   });
 
   it.each(["lobsters", "sspai", "solidot", "techcrunch", "npr-world", "marketwatch", "arstechnica"])("标准化 %s 的独立 RSS fixture", async (id) => {
@@ -168,11 +213,14 @@ describe("真实数据适配器", () => {
     await expect(fetchAihotSelected({ ...context, http: async () => response('{"schemaVersion":1,"items":[]}') })).rejects.toThrow("空数据");
   });
 
-  it("注册 17 个来源且 AIHOT 默认关闭", () => {
+  it("注册 20 个来源且豆瓣默认开启、AIHOT 默认关闭", () => {
     const definitions = createSourceDefinitions(loadEnv({ NODE_ENV: "test" }));
     const registry = createSourceRegistry(definitions);
-    expect(definitions).toHaveLength(17);
-    expect(registry.list()).toHaveLength(15);
+    expect(definitions).toHaveLength(20);
+    expect(registry.list()).toHaveLength(18);
+    expect(registry.get("douban-movies")).toMatchObject({ category: "entertainment", enabled: true });
+    expect(registry.get("douban-tv")).toMatchObject({ category: "entertainment", enabled: true });
+    expect(registry.get("wikipedia-zh")).toMatchObject({ category: "china", enabled: true });
     expect(registry.get("aihot-selected")).toMatchObject({ category: "ai", enabled: false });
     expect(registry.get("aihot-topics")).toMatchObject({ category: "ai", enabled: false });
     expect(registry.list().every((definition) => !("feedUrl" in definition) && !("endpoint" in definition))).toBe(true);
