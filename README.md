@@ -152,18 +152,20 @@ OpenAPI 文档由 `@fastify/swagger` 根据实际路由 schema 动态生成；�
 
 推送到 `main` 后，CI 依次执行质量检查、浏览器测试、Linux amd64 镜像构建和生产部署。PR 只检查和构建；也可以在 Actions 页面手动运行主分支工作流。部署前会确认仍是主分支最新提交，生产发布串行执行。
 
-构建产物通过同次运行的 `production-image` Artifact 传递给部署任务，保留 3 天，不需要服务器连接镜像仓库。部署复用 `scripts/deploy.mjs`，更新 API 和 Worker，检查容器健康、内网和公网聚合接口；检查失败自动恢复上一个镜像。现有 SQLite 数据卷与服务器 `shared/.env` 继续使用。
+CI 将镜像推送到阿里云 ACR 广州仓库 `crpi-ixqtkyv5jyilbxg5.cn-guangzhou.personal.cr.aliyuncs.com/kevinlau/news-spot:<完整提交 SHA>`；服务器从 ACR 拉取镜像，只通过 SSH 上传轻量 Compose 文件，避免跨境传输镜像归档。部署复用 `scripts/deploy.mjs`，更新 API 和 Worker，检查容器健康、内网和公网聚合接口；检查失败自动恢复上一个镜像。现有 SQLite 数据卷与服务器 `shared/.env` 继续使用。
 
 仓库 Actions Secrets 需要配置：
 
 | Secret | 用途 |
 |---|---|
+| `DOCKER_USERNAME` | ACR 登录用户名，供 CI 推送镜像 |
+| `DOCKER_PASSWORD` | ACR 登录密码，供 CI 推送镜像 |
 | `DEPLOY_SSH_HOST` | 服务器地址，SSH 端口为 22 |
 | `DEPLOY_SSH_USER` | 可执行 Docker 和 rsync 的部署用户 |
 | `DEPLOY_SSH_KEY` | 专用部署私钥；对应公钥添加到服务器 authorized_keys |
 | `DEPLOY_SSH_KNOWN_HOSTS` | 已通过可信连接核验的服务器主机公钥，严格校验 SSH 主机身份 |
 
-站点目录、端口和域名在工作流 deploy 任务的环境变量中配置。密钥仅通过 Secrets 注入临时 Runner，任务结束清理。CI 传入 `DEPLOY_IMAGE_ARCHIVE` 和 `DEPLOY_IMAGE_TAG` 时直接使用已检查的镜像归档；本地 `pnpm deploy` 仍执行完整检查和构建。
+站点目录、端口和域名在工作流 deploy 任务的环境变量中配置，ACR 地址在工作流顶层配置。服务器的部署用户需预先通过 `docker login` 登录同一 ACR 仓库；密码使用 `--password-stdin` 输入。密钥仅通过 Secrets 注入临时 Runner，任务结束清理。CI 传入 `DEPLOY_REGISTRY_IMAGE` 后从仓库拉取，并校验镜像 revision 标签等于提交 SHA；本地 `pnpm deploy` 仍执行完整检查和构建。
 
 ## Docker 部署
 

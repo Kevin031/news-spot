@@ -1,51 +1,40 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "../../..");
+const registryImage = `crpi-example.cn-guangzhou.personal.cr.aliyuncs.com/kevinlau/news-spot:${"a".repeat(40)}`;
 function dryRun(extra = {}) {
   return spawnSync(process.execPath, ["scripts/deploy.mjs", "--dry-run"], {
     cwd: root, encoding: "utf8",
-    env: { ...process.env, DEPLOY_CONFIG_FILE: "/nonexistent/deploy.env", DEPLOY_SSH_TARGET: "production", DEPLOY_ENV_FILE: "", DEPLOY_IMAGE_TAG: "", DEPLOY_IMAGE_ARCHIVE: "", ...extra },
+    env: { ...process.env, DEPLOY_CONFIG_FILE: "/nonexistent/deploy.env", DEPLOY_SSH_TARGET: "production", DEPLOY_ENV_FILE: "", DEPLOY_REGISTRY_IMAGE: "", ...extra },
   });
 }
 
-describe("自动部署镜像复用", () => {
-  it("普通发布仍构建和打包镜像", () => {
+describe("ACR 自动部署", () => {
+  it("本地应急发布仍构建和打包镜像", () => {
     const result = dryRun();
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("docker build --platform linux/amd64");
     expect(result.stdout).toContain("docker save news-spot:");
+    expect(result.stdout).toContain("rsync <production-image>");
   });
 
-  it("CI 发布复用已有镜像归档并保留输入文件", () => {
-    const dir = mkdtempSync(join(tmpdir(), "news-spot-deploy-"));
-    const archive = join(dir, "image.tar.gz");
-    writeFileSync(archive, "test archive");
-    try {
-      const result = dryRun({ DEPLOY_IMAGE_ARCHIVE: archive, DEPLOY_IMAGE_TAG: "news-spot:18325ce" });
-      expect(result.status).toBe(0);
-      expect(result.stdout).toContain("复用已通过 CI 检查的镜像：news-spot:18325ce");
-      expect(result.stdout).not.toContain("docker build");
-      expect(result.stdout).not.toContain("docker save");
-      expect(result.stdout).toContain("rsync <production-image>");
-      expect(existsSync(archive)).toBe(true);
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+  it("CI 仓库镜像模式只上传 Compose，不构建或传输镜像包", () => {
+    const result = dryRun({ DEPLOY_REGISTRY_IMAGE: registryImage });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(`使用已通过 CI 检查的仓库镜像：${registryImage}`);
+    expect(result.stdout).not.toContain("docker build");
+    expect(result.stdout).not.toContain("docker save");
+    expect(result.stdout).not.toContain("rsync <production-image>");
+    expect(result.stdout).toContain("rsync <production-compose>");
+    expect(result.stdout).toContain("载入镜像、健康检查并切换版本");
   });
 
-  it("拒绝不完整的镜像配置和不安全标签", () => {
-    expect(dryRun({ DEPLOY_IMAGE_TAG: "news-spot:abc" }).stderr).toContain("必须同时设置");
-    const invalid = dryRun({ DEPLOY_IMAGE_ARCHIVE: "Dockerfile", DEPLOY_IMAGE_TAG: "news-spot:abc'; false" });
-    expect(invalid.status).toBe(1);
-    expect(invalid.stderr).toContain("合法的 news-spot 镜像标签");
-  });
-
-  it("缺失镜像归档时在连接服务器之前失败", () => {
-    const result = dryRun({ DEPLOY_IMAGE_ARCHIVE: "/nonexistent/image.tar.gz", DEPLOY_IMAGE_TAG: "news-spot:abc" });
+  it.each(["news-spot:latest", "registry.example/kevinlau/news-spot:latest", "registry.example/kevinlau/news-spot:abc'; false"])("拒绝非完整 SHA 或不安全的镜像引用：%s", (image) => {
+    const result = dryRun({ DEPLOY_REGISTRY_IMAGE: image });
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("DEPLOY_IMAGE_ARCHIVE 文件不存在");
+    expect(result.stderr).toContain("DEPLOY_REGISTRY_IMAGE 必须是带完整提交 SHA 标签的仓库镜像");
     expect(result.stdout).not.toContain("ssh");
   });
 });

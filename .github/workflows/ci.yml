@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+env:
+  REGISTRY_HOST: crpi-ixqtkyv5jyilbxg5.cn-guangzhou.personal.cr.aliyuncs.com
+  IMAGE_REPOSITORY: crpi-ixqtkyv5jyilbxg5.cn-guangzhou.personal.cr.aliyuncs.com/kevinlau/news-spot
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -35,26 +39,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
+          push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
           platforms: linux/amd64
-          tags: news-spot:${{ github.sha }}
+          tags: ${{ env.IMAGE_REPOSITORY }}:${{ github.sha }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
-          outputs: type=docker,dest=${{ runner.temp }}/news-spot.image.tar
+          provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: 打包发布镜像
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        run: gzip -1 "$RUNNER_TEMP/news-spot.image.tar"
-      - uses: actions/upload-artifact@v4
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        with:
-          name: production-image
-          path: ${{ runner.temp }}/news-spot.image.tar.gz
-          compression-level: 0
-          retention-days: 3
 
   deploy:
     name: 部署生产环境
@@ -73,8 +73,7 @@ jobs:
       DEPLOY_PATH: /opt/news-spot
       DEPLOY_APP_PORT: '20245'
       DEPLOY_DOMAIN: hot-spots.kevinlau.cn
-      DEPLOY_IMAGE_ARCHIVE: .deploy/news-spot.image.tar.gz
-      DEPLOY_IMAGE_TAG: news-spot:${{ github.sha }}
+      DEPLOY_REGISTRY_IMAGE: crpi-ixqtkyv5jyilbxg5.cn-guangzhou.personal.cr.aliyuncs.com/kevinlau/news-spot:${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - name: 确认当前主分支版本
@@ -89,10 +88,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: actions/download-artifact@v4
-        with:
-          name: production-image
-          path: .deploy
       - name: 配置专用部署连接
         if: steps.revision.outputs.current == 'true'
         env:
