@@ -88,8 +88,11 @@ export function createHotService({ registry, http, env, cache, metrics, circuit,
       if (!source || !source.enabled) return null;
       const snapshot = cache.get(sourceId);
       if (snapshot) return fromSnapshot(source, snapshot, limit);
-      const result = await refresh(source, { trigger: "cold" });
-      return { ...result, items: result.items.slice(0, limit) };
+      // 页面请求只读快照；无快照来源由 Worker 补抓，避免上游超时阻塞整批。
+      const lastError = metrics.get(sourceId).lastError;
+      return lastError
+        ? errorResult(source, lastError)
+        : errorResult(source, "来源尚无已保存数据，正在等待后台抓取，请稍后重新加载", "INITIALIZING");
     },
     async refreshSource(sourceId, { trigger = "scheduled", slotKey = null, limit = 20 } = {}) {
       const source = registry.get(sourceId);

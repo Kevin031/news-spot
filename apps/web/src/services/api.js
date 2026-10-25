@@ -13,6 +13,7 @@ async function request(path, { signal } = {}) {
 }
 
 export const newsApi = {
+  feed: (limit = 12, signal) => request(`/api/v1/feed?limit=${limit}`, { signal }),
   sources: (signal) => request("/api/v1/sources", { signal }),
   batch: (ids, limit = 12, signal) => request(`/api/v1/batch?sources=${encodeURIComponent(ids.join(","))}&limit=${limit}`, { signal }),
   hot: (id, { limit = 12, signal } = {}) => request(`/api/v1/hot/${encodeURIComponent(id)}?limit=${limit}`, { signal }),

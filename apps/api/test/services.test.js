@@ -46,11 +46,11 @@ describe("缓存与可靠性服务", () => {
       apiDb.close(); workerDb.close(); rmSync(dir, { recursive: true, force: true });
     }
   });
-  it("命中缓存且并发刷新只调用一次适配器", async () => {
+  it("Worker 并发刷新只调用一次适配器，页面命中快照不抓取", async () => {
     const nowRef = { value: 1_800_000_000_000 };
     const adapter = vi.fn(async () => [item(new Date(nowRef.value).toISOString())]);
     const { db, service } = setup(adapter, nowRef);
-    const [first, second] = await Promise.all([service.get("hackernews"), service.get("hackernews")]);
+    const [first, second] = await Promise.all([service.refreshSource("hackernews"), service.refreshSource("hackernews")]);
     expect(first.status).toBe("fresh");
     expect(second.items).toHaveLength(1);
     expect(adapter).toHaveBeenCalledTimes(1);
@@ -63,11 +63,28 @@ describe("缓存与可靠性服务", () => {
     const nowRef = { value: 1_800_000_000_000 };
     const adapter = vi.fn(async () => [1, 2, 3].map((id) => ({ ...item(new Date(nowRef.value).toISOString()), id: String(id), rank: id })));
     const { db, service } = setup(adapter, nowRef);
-    const [one, two] = await Promise.all([service.get("hackernews", { limit: 1 }), service.get("hackernews", { limit: 2 })]);
+    const [one, two] = await Promise.all([service.refreshSource("hackernews", { limit: 1 }), service.refreshSource("hackernews", { limit: 2 })]);
     expect(one.items).toHaveLength(1);
     expect(two.items).toHaveLength(2);
     expect(adapter).toHaveBeenCalledTimes(1);
     db.close();
+  });
+
+  it("无快照立即返回初始化或最近失败信息，零上游且不等待进行中的抓取", async () => {
+    let finish;
+    const adapter = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const { db, metrics, service } = setup(adapter);
+    try {
+      expect(await service.get("hackernews")).toMatchObject({ success: false, error: { code: "INITIALIZING" } });
+      expect(adapter).not.toHaveBeenCalled();
+      metrics.failure("hackernews", 8000, "上游请求超时（8000ms）");
+      const pending = service.refreshSource("hackernews");
+      expect(await service.batch(["hackernews"])).toMatchObject([{ success: false, error: { message: "上游请求超时（8000ms）" } }]);
+      finish([item(new Date(1_800_000_000_000).toISOString())]);
+      await pending;
+      expect((await service.get("hackernews")).success).toBe(true);
+      expect(adapter).toHaveBeenCalledTimes(1);
+    } finally { db.close(); }
   });
 
   it("计划抓取失败时保留最近成功快照和抓取日志", async () => {

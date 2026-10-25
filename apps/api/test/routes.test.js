@@ -44,7 +44,7 @@ describe("API 路由", () => {
     expect(spec.paths["/api/docs"]).toBeUndefined();
     expect(spec.paths["/api/openapi.json"]).toBeUndefined();
     expect(Object.keys(spec.paths).sort()).toEqual([
-      "/api/v1/batch", "/api/v1/fetch-logs", "/api/v1/health", "/api/v1/health/live",
+      "/api/v1/batch", "/api/v1/feed", "/api/v1/fetch-logs", "/api/v1/health", "/api/v1/health/live",
       "/api/v1/hot/{sourceId}", "/api/v1/metrics", "/api/v1/sources", "/api/v1/steam-prices", "/api/v1/steam-deals",
     ].sort());
     for (const path of Object.keys(spec.paths)) {
@@ -59,6 +59,7 @@ describe("API 路由", () => {
   it("返回来源、真实热点和批量摘要", async () => {
     const app = await makeApp();
     expect((await app.inject("/api/v1/sources")).json().sources).toHaveLength(1);
+    await app.newsSpot.hotService.refreshSource("hackernews", { trigger: "cold" });
     const hot = await app.inject("/api/v1/hot/hackernews?limit=1");
     expect(hot.statusCode).toBe(200);
     expect(hot.json().items[0].title).toBe("真实数据");
@@ -71,6 +72,34 @@ describe("API 路由", () => {
     expect(logs.items[0]).not.toHaveProperty("rawResponse");
     await app.inject("/api/v1/hot/hackernews");
     expect((await app.inject("/api/v1/fetch-logs")).json().items).toHaveLength(1);
+  });
+
+  it("聚合接口一次返回全部启用来源，隔离无快照错误且不请求上游", async () => {
+    const definition = createSourceDefinitions(loadEnv({}))[0];
+    const definitions = Array.from({ length: 18 }, (_, index) => ({ ...definition, id: `source-${index}`, enabled: true }));
+    let fetchCount = 0;
+    const app = await buildApp({
+      env: loadEnv({ NODE_ENV: "test", DATABASE_PATH: ":memory:", LOG_LEVEL: "silent" }),
+      sources: definitions, databasePath: ":memory:", logger: false,
+      fetchImpl: async () => { fetchCount += 1; throw new Error("聚合读取不应访问上游"); },
+    });
+    apps.push(app);
+    for (const source of definitions.slice(1)) {
+      const items = [1, 2].map((rank) => ({ id: `${source.id}-${rank}`, sourceId: source.id, title: "已保存热点", url: "https://example.com/news", rank, score: null, summary: null, publishedAt: null, fetchedAt: new Date().toISOString() }));
+      app.newsSpot.cache.set(source.id, items, 30000);
+    }
+    const before = (await app.inject("/api/v1/fetch-logs")).json().items.length;
+    const response = await app.inject("/api/v1/feed?limit=1");
+    expect(response.statusCode).toBe(200);
+    const feed = response.json();
+    expect(fetchCount).toBe(0);
+    expect(feed.sources).toHaveLength(18);
+    expect(feed.results).toHaveLength(18);
+    expect(feed.summary).toMatchObject({ total: 18, success: 17, failed: 1 });
+    expect(feed.results[0]).toMatchObject({ sourceId: "source-0", success: false, error: { code: "INITIALIZING" } });
+    expect(feed.results.slice(1).every((result) => result.items.length === 1)).toBe(true);
+    expect((await app.inject("/api/v1/fetch-logs")).json().items).toHaveLength(before);
+    expect((await app.inject("/api/v1/feed?limit=51")).statusCode).toBe(400);
   });
 
   it("拒绝非法参数和未知来源", async () => {
@@ -135,12 +164,13 @@ describe("API 路由", () => {
     const app = await makeApp();
     const health = await app.inject("/api/v1/health");
     expect(health.json()).toMatchObject({ database: "ok", sources: { availabilityRatio: 0 } });
+    await app.newsSpot.hotService.refreshSource("hackernews");
     await app.inject("/api/v1/hot/hackernews?limit=1");
     expect((await app.inject("/api/v1/health")).json()).toMatchObject({ sources: { availabilityRatio: 1 } });
     expect((await app.inject("/api/v1/metrics")).json().sources).toHaveLength(1);
   });
 
-  it("空库补抓先入库再返回，普通重读零上游，Worker 更新跨连接可见", async () => {
+  it("空库只读零上游，Worker 更新跨连接可见，普通重读不触发抓取", async () => {
     const dir = mkdtempSync(join(tmpdir(), "news-spot-cold-"));
     const databasePath = join(dir, "news.db");
     let fetchCount = 0;
@@ -153,6 +183,12 @@ describe("API 路由", () => {
     const api = await buildApp({ env, databasePath, sources, fetchImpl, logger: false });
     const worker = await buildApp({ env, databasePath, sources, fetchImpl, logger: false });
     try {
+      const empty = (await api.inject("/api/v1/hot/hackernews")).json();
+      expect(empty).toMatchObject({ success: false, items: [], error: { code: "INITIALIZING" } });
+      expect((await api.inject("/api/v1/batch?sources=hackernews")).json().summary).toMatchObject({ success: 0, failed: 1 });
+      expect(fetchCount).toBe(0);
+      expect((await api.inject("/api/v1/fetch-logs")).json().items).toHaveLength(0);
+      await worker.newsSpot.hotService.refreshSource("hackernews", { trigger: "cold" });
       const first = (await api.inject("/api/v1/hot/hackernews")).json();
       expect(first.items[0].title).toBe("第 2 次抓取");
       expect(api.newsSpot.cache.get("hackernews")?.items[0].title).toBe(first.items[0].title);
@@ -183,6 +219,7 @@ describe("API 路由", () => {
     };
     const app = await makeAihotApp(fetchImpl, () => nowValue);
     expect((await app.inject("/api/v1/sources")).json().sources.map((entry) => entry.id)).toEqual(["aihot-selected", "aihot-topics"]);
+    await Promise.all(["aihot-selected", "aihot-topics"].map((id) => app.newsSpot.hotService.refreshSource(id)));
     const batch = (await app.inject("/api/v1/batch?sources=aihot-selected,aihot-topics&limit=12")).json();
     expect(batch.summary).toMatchObject({ total: 2, success: 2 });
     expect(batch.results[0].items[0]).toMatchObject({ originalSourceName: "MarkTechPost（RSS）", attribution: { name: "AIHOT" } });
@@ -205,6 +242,7 @@ describe("API 路由", () => {
       calls += 1;
       return calls === 1 ? new Response(selected, { status: 200, headers: { ETag: 'W/"selected-1"' } }) : new Response(null, { status: 304 });
     }, () => current);
+    await app.newsSpot.hotService.refreshSource("aihot-selected");
     const first = (await app.inject("/api/v1/hot/aihot-selected")).json();
     current += 61_000;
     const next = await app.newsSpot.hotService.refreshSource("aihot-selected");

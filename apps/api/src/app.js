@@ -8,6 +8,7 @@ import swagger from "@fastify/swagger";
 import Fastify from "fastify";
 import { apiDocsRoutes } from "./api-docs.js";
 import { batchRoutes } from "./routes/batch.js";
+import { feedRoutes } from "./routes/feed.js";
 import { fetchLogsRoutes } from "./routes/fetch-logs.js";
 import { healthRoutes } from "./routes/health.js";
 import { hotRoutes } from "./routes/hot.js";
@@ -31,7 +32,7 @@ export async function buildApp(options = {}) {
     info: {
       title: "热点聚合 API",
       version: "1.0.0",
-      description: "公开只读接口，无需认证，默认每个客户端每分钟最多 120 次请求。时间字段通常使用 ISO 8601，抓取统计中注明的时间戳使用 Unix 毫秒。热点数据通常来自已保存快照，来源尚无快照时可能触发一次补抓。跨域浏览器请求受 CORS 允许来源配置限制。",
+      description: "公开只读接口，无需认证，默认每个客户端每分钟最多 120 次请求。时间字段通常使用 ISO 8601，抓取统计中注明的时间戳使用 Unix 毫秒。热点数据只读取已保存快照，无快照时立即返回来源错误，由 Worker 后台抓取。跨域浏览器请求受 CORS 允许来源配置限制。",
     },
     servers: [{ url: "/", description: "当前站点" }],
     tags: [
@@ -60,6 +61,7 @@ export async function buildApp(options = {}) {
   await app.register(sourcesRoutes, context);
   await app.register(hotRoutes, context);
   await app.register(batchRoutes, context);
+  await app.register(feedRoutes, context);
   await app.register(healthRoutes, context);
   await app.register(metricsRoutes, context);
   await app.register(fetchLogsRoutes, context);

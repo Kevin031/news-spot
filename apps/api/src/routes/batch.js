@@ -3,7 +3,7 @@ import { responseSchema } from "../route-schemas.js";
 export async function batchRoutes(app, context) {
   app.get("/api/v1/batch", {
     schema: {
-      tags: ["热点"], summary: "批量获取热点", description: "最多 12 个来源；未知来源会在 results 中返回失败项，其他来源照常返回。",
+      tags: ["热点"], summary: "批量获取热点", description: "最多 12 个来源，只读取已保存快照；未知或无快照来源会在 results 中立即返回失败项，其他来源照常返回。",
       querystring: { type: "object", required: ["sources"], properties: { sources: { type: "string", minLength: 1, maxLength: 500, description: "以逗号分隔的来源 ID，去重后最多 12 个" }, limit: { type: "integer", minimum: 1, maximum: 50, default: 12, description: "每个来源返回的条数" } } },
       response: { 200: responseSchema("BatchResponse"), 400: responseSchema("ApiError"), 500: responseSchema("ApiError") },
     },

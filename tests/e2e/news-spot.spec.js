@@ -28,8 +28,8 @@ test.beforeEach(async ({ page }) => {
     hasMore: false, fetchedAt: "2026-08-21T09:00:00.000Z", stale: true,
   }) }));
   await page.route("**/api/v1/sources", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ timestamp: new Date().toISOString(), sources }) }));
-  await page.route("**/api/v1/batch?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
-    timestamp: new Date().toISOString(),
+  await page.route("**/api/v1/feed?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
+    timestamp: new Date().toISOString(), sources,
     results: sources.map((source, index) => result(source, index === 3 ? "stale" : index === 5 ? "error" : "fresh")),
     summary: { total: 8, success: 7, failed: 1, stale: 1 },
   }) }));
@@ -57,13 +57,26 @@ test("响应式首页展示真实来源状态且无横向溢出", async ({ page 
   }
 });
 
-test("页面重载只请求已保存数据，抓取日志按钮在移动端可用", async ({ page }) => {
-  const hotUrls = [];
-  page.on("request", (request) => { if (request.url().includes("/api/v1/hot/")) hotUrls.push(request.url()); });
+test("首次新闻加载只请求一次聚合接口", async ({ page }) => {
+  const newsUrls = [];
+  page.on("request", (request) => {
+    if (/\/api\/v1\/(feed|sources|batch|hot)(?:[/?]|$)/.test(request.url())) newsUrls.push(request.url());
+  });
   await page.goto("/");
+  await expect(page.getByText("Hacker News 真实热点", { exact: true })).toBeVisible();
+  await expect(page.getByText("AIHOT 精选 真实热点", { exact: true })).toBeVisible();
+  expect(newsUrls).toHaveLength(1);
+  expect(newsUrls[0]).toContain("/api/v1/feed?limit=12");
+});
+
+test("页面重载只请求已保存数据，抓取日志按钮在移动端可用", async ({ page }) => {
+  const feedUrls = [];
+  page.on("request", (request) => { if (request.url().includes("/api/v1/feed?")) feedUrls.push(request.url()); });
+  await page.goto("/");
+  await expect(page.getByText("Hacker News 真实热点", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "重新加载全部来源" }).click();
-  await expect.poll(() => hotUrls.length).toBe(8);
-  expect(hotUrls.every((url) => !url.includes("refresh=true"))).toBe(true);
+  await expect.poll(() => feedUrls.length).toBe(2);
+  expect(feedUrls.every((url) => !url.includes("refresh=true"))).toBe(true);
   await page.getByRole("button", { name: "抓取日志" }).click();
   const dialog = page.getByRole("dialog", { name: "抓取日志" });
   await expect(dialog).toBeVisible();
@@ -84,8 +97,8 @@ test("AI 资讯板块区分精选与热点榜并保留来源链接", async ({ pa
 });
 
 test("AIHOT 一张卡片失败时另一张仍可浏览", async ({ page }) => {
-  await page.route("**/api/v1/batch?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
-    timestamp: new Date().toISOString(),
+  await page.route("**/api/v1/feed?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
+    timestamp: new Date().toISOString(), sources,
     results: sources.map((source) => result(source, source.id === "aihot-topics" ? "error" : "fresh")),
     summary: { total: sources.length, success: sources.length - 1, failed: 1, stale: 0 },
   }) }));
@@ -97,7 +110,7 @@ test("AIHOT 一张卡片失败时另一张仍可浏览", async ({ page }) => {
 });
 
 test("未启用 AIHOT 时隐藏空的 AI 资讯分类", async ({ page }) => {
-  await page.route("**/api/v1/sources", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ timestamp: new Date().toISOString(), sources: sources.filter((source) => source.category !== "ai") }) }));
+  await page.route("**/api/v1/feed?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ timestamp: new Date().toISOString(), sources: sources.filter((source) => source.category !== "ai"), results: sources.filter((source) => source.category !== "ai").map((source) => result(source)) }) }));
   await page.goto("/");
   await expect(page.getByRole("tab", { name: /AI 资讯/ })).toHaveCount(0);
   await expect(page.locator(".source-card")).toHaveCount(6);
@@ -169,8 +182,8 @@ test("首页 Steam 优惠卡片展示缩略图、价格和 CheapShark 链接", a
 
 test("桌面热点卡片在 80vh 内独立滚动", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === "mobile");
-  await page.route("**/api/v1/batch?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
-    timestamp: new Date().toISOString(),
+  await page.route("**/api/v1/feed?**", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
+    timestamp: new Date().toISOString(), sources,
     results: sources.map((source) => ({ ...result(source), items: Array.from({ length: 30 }, (_, index) => ({
       ...result(source).items[0], id: `${source.id}-${index}`, title: `${source.name} 热点 ${index}`,
     })) })),

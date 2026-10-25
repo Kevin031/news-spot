@@ -65,6 +65,10 @@ export const batchResponseSchema = z.object({
   }),
 });
 
+export const feedResponseSchema = batchResponseSchema.extend({
+  sources: z.array(publicSourceSchema),
+});
+
 export const healthResponseSchema = z.object({
   status: z.enum(["healthy", "degraded", "unhealthy"]),
   timestamp: z.string().datetime(),

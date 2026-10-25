@@ -127,6 +127,7 @@ OpenAPI 文档由 `@fastify/swagger` 根据实际路由 schema 动态生成；�
 | `GET /api/v1/sources` | 来源元数据和当前状态 |
 | `GET /api/v1/hot/:sourceId?limit=12` | 单来源热点 |
 | `GET /api/v1/batch?sources=a,b&limit=12` | 最多 12 个来源的部分成功批量响应 |
+| `GET /api/v1/feed?limit=12` | 一次返回所有启用来源的元数据、热点和统计，只读已保存快照 |
 | `GET /api/v1/fetch-logs` | 最近 30 天的抓取日志，支持 `sourceId`、`status`、`cursor`、`limit` 筛选和分页 |
 | `GET /api/v1/steam-prices?appids=620,1057090` | 最多批量查询 8 款游戏的 Steam 中国区价格和本地化名称，金额单位为人民币分 |
 | `GET /api/v1/steam-deals?pageNumber=0` | 分页读取 Worker 保存的 Steam 国区优惠快照，不发起上游请求 |
@@ -139,13 +140,13 @@ OpenAPI 文档由 `@fastify/swagger` 根据实际路由 schema 动态生成；�
 ## 定时抓取与失败策略
 
 - 独立 Worker 默认在北京时间每天 `05:00`、`15:00` 抓取所有启用的来源并写入 SQLite；启动时补跑最近未完成的时段，若该时段已完成，则立即补抓所有尚无快照的启用来源。Steam 优惠也会在缺少快照时立即抓取。可用 `WORKER_RUN_TIMES`、`WORKER_TIME_ZONE` 配置时段。
-- 页面加载与“重新加载”只读取 SQLite。某来源没有任何快照时，API 才进行一次受租约保护的补抓，成功写库后返回。同一来源的并发补抓只执行一次。
+- 页面加载与“全部刷新”通过 `/api/v1/feed?limit=12` 一次读取所有新闻来源的元数据和 SQLite 快照，减少来源列表与分批请求的网络往返；单卡重新加载仍使用单来源接口。没有快照时立即显示后台待抓取或最近抓取错误，由 Worker 在启动补抓和计划时段更新，避免失败来源拖慢整批内容。
 - 最近计划时段尚未更新时，页面展示已保存的旧数据与实际更新时间。抓取失败不覆盖旧快照。
 - 页头“抓取日志”按钮可查看定时、补抓及手动运行的结果，日志保留 30 天。`/api/v1/health` 报告 Worker 心跳、下次时段和最近时段结果。
 - 公网 `refresh=true` 已停用并返回 `REFRESH_DISABLED`。来源契约的 `refreshIntervalMs` 为兼容旧客户端保留，不再决定抓取频率。
 - 网络错误、408、429 和 5xx 最多重试两次；普通 4xx 不重试。
 - 连续三次失败后熔断五分钟。
-- 没有成功快照且补抓失败时返回明确错误，不伪造内容。
+- 没有成功快照时返回明确错误，不发起同步补抓、不伪造内容。
 
 ## Docker 部署
 

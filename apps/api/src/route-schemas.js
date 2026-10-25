@@ -35,6 +35,10 @@ export const sharedSchemas = {
       timestamp: dateTime, results: { type: "array", items: ref("SourceResult") },
       summary: { type: "object", required: ["total", "success", "failed", "stale"], properties: { total: integer, success: integer, failed: integer, stale: integer } },
     } },
+    FeedResponse: { type: "object", required: ["timestamp", "sources", "results", "summary"], properties: {
+      timestamp: dateTime, sources: { type: "array", items: ref("Source") },
+      results: { type: "array", items: ref("SourceResult") }, summary: { $ref: "BatchResponse#/properties/summary" },
+    } },
     SteamPrice: { type: "object", nullable: true, required: ["currency", "originalCents", "finalCents", "discountPercent", "localizedName"], properties: {
       currency: { ...string, enum: ["CNY"] }, originalCents: integer, finalCents: integer, discountPercent: integer, localizedName: nullableString,
     } },
