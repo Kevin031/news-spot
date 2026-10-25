@@ -73,7 +73,7 @@ jobs:
       DEPLOY_PATH: /opt/news-spot
       DEPLOY_APP_PORT: '20245'
       DEPLOY_DOMAIN: hot-spots.kevinlau.cn
-      DEPLOY_IMAGE_ARCHIVE: ${{ runner.temp }}/news-spot.image.tar.gz
+      DEPLOY_IMAGE_ARCHIVE: .deploy/news-spot.image.tar.gz
       DEPLOY_IMAGE_TAG: news-spot:${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -92,7 +92,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: production-image
-          path: ${{ runner.temp }}
+          path: .deploy
       - name: 配置专用部署连接
         if: steps.revision.outputs.current == 'true'
         env:
