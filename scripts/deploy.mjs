@@ -43,6 +43,8 @@ const config = {
   keepReleases: process.env.DEPLOY_KEEP_RELEASES || "5",
   nodeImage: process.env.DEPLOY_NODE_IMAGE || "node:22-bookworm-slim",
   npmRegistry: process.env.DEPLOY_NPM_REGISTRY || "https://registry.npmjs.org",
+  imageArchive: process.env.DEPLOY_IMAGE_ARCHIVE || "",
+  imageTag: process.env.DEPLOY_IMAGE_TAG || "",
   skipPublicCheck: ["1", "true", "yes"].includes((process.env.DEPLOY_SKIP_PUBLIC_CHECK || "false").toLowerCase()),
 };
 
@@ -62,13 +64,16 @@ if (!/^[a-z0-9./:_@-]+$/i.test(config.nodeImage)) fail("DEPLOY_NODE_IMAGE 包含
 if (!/^https:\/\/[a-z0-9./_-]+$/i.test(config.npmRegistry)) fail("DEPLOY_NPM_REGISTRY 必须是安全的 HTTPS 地址");
 if (config.envFile && !existsSync(resolve(root, config.envFile))) fail("DEPLOY_ENV_FILE 文件不存在");
 if (config.proxyReload && /[\r\n\0]/.test(config.proxyReload)) fail("DEPLOY_PROXY_RELOAD_COMMAND 包含非法换行");
+if (Boolean(config.imageArchive) !== Boolean(config.imageTag)) fail("DEPLOY_IMAGE_ARCHIVE 与 DEPLOY_IMAGE_TAG 必须同时设置");
+if (config.imageTag && !/^news-spot:[a-z0-9][a-z0-9._-]*$/.test(config.imageTag)) fail("DEPLOY_IMAGE_TAG 必须是合法的 news-spot 镜像标签");
+if (config.imageArchive && !existsSync(resolve(root, config.imageArchive))) fail("DEPLOY_IMAGE_ARCHIVE 文件不存在");
 
 const releaseId = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
 const releasePath = `${config.path}/releases/${releaseId}`;
 const image = `news-spot:${releaseId}`;
 const workPath = resolve(root, ".deploy");
 const imageTar = resolve(workPath, `${releaseId}.image.tar`);
-const imageArchive = `${imageTar}.gz`;
+const imageArchive = config.imageArchive ? resolve(root, config.imageArchive) : `${imageTar}.gz`;
 const remoteArchive = `${config.path}/incoming/${releaseId}.image.tar.gz`;
 const sshArgs = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"];
 if (config.port) sshArgs.push("-p", config.port);
@@ -95,18 +100,22 @@ console.log(`发布目录：${releasePath}`);
 console.log(`应用端口：127.0.0.1:${config.appPort}`);
 console.log(`模式：${dryRun ? "dry-run" : "正式部署"}`);
 
-if (!dryRun) {
+if (!dryRun && !config.imageArchive) {
   run(pnpmCommand, ["lint"], { visible: "pnpm lint" });
   run(pnpmCommand, ["typecheck"], { visible: "pnpm typecheck" });
   run(pnpmCommand, ["test"], { visible: "pnpm test" });
   run(pnpmCommand, ["build"], { visible: "pnpm build" });
-  run("ssh", [...sshArgs, config.target, "true"], { visible: "ssh <tencent-cloud> 检查连接" });
   mkdirSync(workPath, { recursive: true });
 }
+run("ssh", [...sshArgs, config.target, "true"], { visible: "ssh <tencent-cloud> 检查连接" });
 
-run("docker", ["build", "--platform", "linux/amd64", "--build-arg", `NODE_IMAGE=${config.nodeImage}`, "--build-arg", `NPM_REGISTRY=${config.npmRegistry}`, "-t", image, "."], { visible: `docker build --platform linux/amd64 --build-arg NODE_IMAGE=<configured> --build-arg NPM_REGISTRY=<configured> -t ${image} .` });
-run("docker", ["save", "--output", imageTar, image], { visible: `docker save ${image}` });
-run("gzip", ["-1", "-f", imageTar], { visible: "gzip <production-image>" });
+if (!config.imageArchive) {
+  run("docker", ["build", "--platform", "linux/amd64", "--build-arg", `NODE_IMAGE=${config.nodeImage}`, "--build-arg", `NPM_REGISTRY=${config.npmRegistry}`, "-t", image, "."], { visible: `docker build --platform linux/amd64 --build-arg NODE_IMAGE=<configured> --build-arg NPM_REGISTRY=<configured> -t ${image} .` });
+  run("docker", ["save", "--output", imageTar, image], { visible: `docker save ${image}` });
+  run("gzip", ["-1", "-f", imageTar], { visible: "gzip <production-image>" });
+} else {
+  console.log(`复用已通过 CI 检查的镜像：${config.imageTag}`);
+}
 
 ssh(`mkdir -p '${config.path}/incoming' '${releasePath}/deploy' '${config.path}/shared'`, "ssh <tencent-cloud> 创建发布目录");
 run("rsync", ["--archive", "--partial", "--compress", "-e", rsyncSsh, imageArchive, `${config.target}:${remoteArchive}`], { visible: "rsync <production-image> <tencent-cloud>" });
@@ -146,6 +155,7 @@ rollback() {
   exit 1
 }
 gzip -dc '${remoteArchive}' | docker load
+${config.imageTag ? `docker tag '${config.imageTag}' '${image}'\ndocker image rm '${config.imageTag}' >/dev/null` : ""}
 NEWS_SPOT_IMAGE='${image}' APP_PORT='${config.appPort}' docker compose -p news-spot -f deploy/compose.prod.yaml up -d --remove-orphans || rollback
 api_health=''; worker_health=''; i=0
 while [ $i -lt 45 ]; do
@@ -157,7 +167,8 @@ done
 [ "$api_health" = healthy ] && [ "$worker_health" = healthy ] || rollback
 curl -fsS 'http://127.0.0.1:${config.appPort}/api/v1/health/live' >/dev/null || rollback
 curl -fsS 'http://127.0.0.1:${config.appPort}/api/v1/fetch-logs?limit=1' >/dev/null || rollback
-${config.skipPublicCheck ? "" : `curl -fsS --max-time 20 'https://${config.domain}/api/v1/fetch-logs?limit=1' >/dev/null || rollback`}
+curl -fsS --max-time 20 'http://127.0.0.1:${config.appPort}/api/v1/feed?limit=1' >/dev/null || rollback
+${config.skipPublicCheck ? "" : `curl -fsS --max-time 20 'https://${config.domain}/api/v1/feed?limit=1' >/dev/null || rollback`}
 ${proxyCommand}ln -sfn '${releasePath}' '${config.path}/current'
 printf '%s\\n' '${image}' > '${config.path}/current-image'
 rm -f '${remoteArchive}'
@@ -176,5 +187,5 @@ if (!config.skipPublicCheck) {
   run("curl", ["--noproxy", "*", "--fail", "--silent", "--show-error", "--location", "--max-time", "20", `https://${config.domain}/api/v1/health/live`], { visible: `curl --noproxy '*' https://${config.domain}/api/v1/health/live` });
 }
 
-if (!dryRun) rmSync(imageArchive, { force: true });
+if (!dryRun && !config.imageArchive) rmSync(imageArchive, { force: true });
 console.log(`\n部署完成：https://${config.domain}`);

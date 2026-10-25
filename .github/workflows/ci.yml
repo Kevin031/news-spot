@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   quality:
@@ -35,4 +39,81 @@ jobs:
         with:
           context: .
           push: false
-          tags: news-spot:ci
+          platforms: linux/amd64
+          tags: news-spot:${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=docker,dest=${{ runner.temp }}/news-spot.image.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: 打包发布镜像
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: gzip -1 "$RUNNER_TEMP/news-spot.image.tar"
+      - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          name: production-image
+          path: ${{ runner.temp }}/news-spot.image.tar.gz
+          compression-level: 0
+          retention-days: 3
+
+  deploy:
+    name: 部署生产环境
+    needs: docker
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://hot-spots.kevinlau.cn
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    env:
+      DEPLOY_SSH_TARGET: production
+      DEPLOY_PATH: /opt/news-spot
+      DEPLOY_APP_PORT: '20245'
+      DEPLOY_DOMAIN: hot-spots.kevinlau.cn
+      DEPLOY_IMAGE_ARCHIVE: ${{ runner.temp }}/news-spot.image.tar.gz
+      DEPLOY_IMAGE_TAG: news-spot:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 确认当前主分支版本
+        id: revision
+        run: |
+          git fetch origin main --depth=1
+          if [ "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo '主分支已有新提交，跳过旧版本部署。'
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-image
+          path: ${{ runner.temp }}
+      - name: 配置专用部署连接
+        if: steps.revision.outputs.current == 'true'
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          test -n "$DEPLOY_SSH_KEY"
+          test -n "$DEPLOY_SSH_HOST"
+          test -n "$DEPLOY_SSH_USER"
+          test -n "$DEPLOY_SSH_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host production\n  HostName %s\n  User %s\n  IdentityFile ~/.ssh/deploy_key\n  IdentitiesOnly yes\n  StrictHostKeyChecking yes\n' "$DEPLOY_SSH_HOST" "$DEPLOY_SSH_USER" > ~/.ssh/config
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts ~/.ssh/config
+      - name: 发布镜像并检查 API 和 Worker
+        if: steps.revision.outputs.current == 'true'
+        run: node scripts/deploy.mjs
+      - name: 清理部署密钥
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
